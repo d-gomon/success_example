@@ -1,2 +1,2 @@
 # Success example
-Simulation examples and old code for the success package (see d-gomon/success).
+Simulation examples (SimulationExample.R) and old code (/OLD) for the success package (see d-gomon/success).
