@@ -1,0 +1,525 @@
+---
+title: "LROI Detection"
+author: "Daniel Gomon"
+date: "02/03/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Import the Dutch Arthroplasty Register data - data set is confidential, requested under agreement LROI 2020-053
+
+```{r}
+rmarkdown::render("Data.Rmd")
+```
+
+#Used success package version 0.1.0 for this script. Source files attached on github.
+
+```{r}
+#install.packages("C:/Users/danie/OneDrive - Universiteit Leiden/CGRCUSUM/Biostat_RCode/success_0.1.0.tar.gz", repos = NULL, type="source") 
+library(success)
+```
+
+#Determine Risk-adjustment models to use for the Discrete time methods
+
+```{r}
+followup <- 365
+varsanalysisfunnel <- c("age", "Gender", "BMI", "ASA_Class", "Charnley_Score", "Diagnosis", "Smoker")
+exprfitfunnel <- as.formula(paste("(Xi <= 365) & (Status == 1)~" ,paste(varsanalysisfunnel, collapse='+')))
+glmmod3yr <- glm(exprfitfunnel, data = subset(datimp, Si + 365 < 3*365) , family = binomial(link = "logit"))
+glmmod4yr <- glm(exprfitfunnel, data = subset(datimp, Si + 365 < 4*365) , family = binomial(link = "logit"))
+glmmod5yr <- glm(exprfitfunnel, data = subset(datimp, Si + 365 < 5*365) , family = binomial(link = "logit"))
+glmmod6yr <- glm(exprfitfunnel, data = subset(datimp, Si + 365 < 6*365) , family = binomial(link = "logit"))
+```
+
+
+#Determine Funnel plot at 3-4-5-6 years + detected hospitals every year.
+
+```{r}
+
+funnel3yr <- funnel_plot(data = datimp, ctime = 3*365, glmmod = glmmod3yr, followup = 365)
+funnel4yr <- funnel_plot(data = datimp, ctime = 4*365, glmmod = glmmod4yr, followup = 365)
+funnel5yr <- funnel_plot(data = datimp, ctime = 5*365, glmmod = glmmod5yr, followup = 365)
+funnel6yr <- funnel_plot(data = datimp, ctime = 6*365, glmmod = glmmod6yr, followup = 365)
+
+
+fundet3yr <- which(summary(funnel3yr)$"0.95" == "worse")
+fundet4yr <- which(summary(funnel4yr)$"0.95" == "worse")
+fundet5yr <- which(summary(funnel5yr)$"0.95" == "worse")
+fundet6yr <- which(summary(funnel6yr)$"0.95" == "worse")
+```
+
+#Determine detections by Bernoulli CUSUM at 3-4-5-6 years.
+
+```{r}
+library(success)
+hosps <- sort(unique(datimp$unit))
+BERCUS3yr <- vector(mode = "list", length = length(hosps))
+BERCUS4yr <- vector(mode = "list", length = length(hosps))
+BERCUS5yr <- vector(mode = "list", length = length(hosps))
+BERCUS6yr <- vector(mode = "list", length = length(hosps))
+pb <- txtProgressBar(min = 1, max = length(hosps), style = 3)
+for(i in 1:length(hosps)){
+  setTxtProgressBar(pb, value = i)
+  BERCUS3yr[[i]] <- bernoulli_cusum(data = subset(datimp, unit == hosps[i]), followup = 365, glmmod = glmmod3yr, theta = log(2), stoptime = 3*366)
+  BERCUS4yr[[i]] <- bernoulli_cusum(data = subset(datimp, unit == hosps[i]), followup = 365, glmmod = glmmod4yr, theta = log(2), stoptime = 4*366)
+  BERCUS5yr[[i]] <- bernoulli_cusum(data = subset(datimp, unit == hosps[i]), followup = 365, glmmod = glmmod5yr, theta = log(2), stoptime = 5*366)
+  BERCUS6yr[[i]] <- bernoulli_cusum(data = subset(datimp, unit == hosps[i]), followup = 365, glmmod = glmmod6yr, theta = log(2), stoptime = 6*366)
+  BERCUS3yr[[i]]$unit <- hosps[i]
+  BERCUS4yr[[i]]$unit <- hosps[i]
+  BERCUS5yr[[i]]$unit <- hosps[i]
+  BERCUS6yr[[i]]$unit <- hosps[i]
+}
+close(pb)
+save(BERCUS3yr, BERCUS4yr, BERCUS5yr, BERCUS6yr, file = "BERCUS3456.Rdata")
+```
+
+
+#Determine Risk-adjustment models to use for the Continuous time methods
+
+
+##Slight speed-up by manually extracting the cumulative baseline hazard instead of feeding phmodel to cgr_cusum.
+```{r}
+library(survival)
+varsanalysis <- c("age", "Gender", "BMI", "ASA_Class", "Charnley_Score", "Diagnosis", "Smoker")
+exprfit <- as.formula(paste("Surv(Xi, Status) ~" ,paste(varsanalysis, collapse='+')))
+
+phmodel3yr <- coxph(exprfit, data= subset(datimp, Si + 365 < 3*365))
+cbaseh3yr <- extract_hazard(phmodel3yr)$cbaseh
+
+phmodel4yr <- coxph(exprfit, data= subset(datimp, Si + 365 < 4*365))
+cbaseh4yr <- extract_hazard(phmodel4yr)$cbaseh
+
+phmodel5yr <- coxph(exprfit, data= subset(datimp, Si + 365 < 5*365))
+cbaseh5yr <- extract_hazard(phmodel5yr)$cbaseh
+
+phmodel6yr <- coxph(exprfit, data= subset(datimp, Si + 365 < 6*365))
+cbaseh6yr <- extract_hazard(phmodel6yr)$cbaseh
+
+phmodelfull <- coxph(exprfit, data = datimp)
+
+xseq <- seq(1, 600, 1)
+plot(xseq, cbaseh3yr(xseq))
+lines(cbaseh4yr(xseq))
+lines(cbaseh5yr(xseq))
+lines(cbaseh6yr(xseq))
+```
+
+
+#Determine BK-CUSUM charts (using information available to Funnel plot at 3-4-5-6 years.)
+
+
+
+```{r}
+library(success)
+hosps <- sort(unique(datimp$unit))
+BKCUS3yr <- vector(mode = "list", length = length(hosps))
+BKCUS4yr <- vector(mode = "list", length = length(hosps))
+BKCUS5yr <- vector(mode = "list", length = length(hosps))
+BKCUS6yr <- vector(mode = "list", length = length(hosps))
+pb <- txtProgressBar(min = 1, max = length(hosps), style = 3)
+for(i in 1:length(hosps)){
+  setTxtProgressBar(pb, value = i)
+  BKCUS3yr[[i]] <- bk_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel3yr, cbaseh = cbaseh3yr, theta = log(2))
+  BKCUS4yr[[i]] <- bk_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel4yr, cbaseh = cbaseh4yr, theta = log(2))
+  BKCUS5yr[[i]] <- bk_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel5yr, cbaseh = cbaseh5yr, theta = log(2))
+  BKCUS6yr[[i]] <- bk_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel6yr, cbaseh = cbaseh6yr, theta = log(2))
+  BKCUS3yr[[i]]$unit <- hosps[i]
+  BKCUS4yr[[i]]$unit <- hosps[i]
+  BKCUS5yr[[i]]$unit <- hosps[i]
+  BKCUS6yr[[i]]$unit <- hosps[i]
+}
+close(pb)
+save(BKCUS3yr, BKCUS4yr, BKCUS5yr, BKCUS6yr, file = "BKCUS3456.Rdata")
+```
+
+```{r}
+load("BKCUS3456.Rdata")
+```
+
+
+
+
+#Determine CGR-CUSUM charts (using information available to Funnel plot at 3-4-5-6 years.)
+
+
+```{r}
+library(success)
+hosps <- sort(unique(datimp$unit))
+CGRCUS3yr <- vector(mode = "list", length = length(hosps))
+CGRCUS4yr <- vector(mode = "list", length = length(hosps))
+CGRCUS5yr <- vector(mode = "list", length = length(hosps))
+CGRCUS6yr <- vector(mode = "list", length = length(hosps))
+pb <- txtProgressBar(min = 1, max = length(hosps), style = 3)
+for(i in 1:length(hosps)){
+  setTxtProgressBar(pb, value = i)
+  CGRCUS3yr[[i]] <- cgr_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel3yr, cbaseh = cbaseh3yr, pb = TRUE)
+  CGRCUS4yr[[i]] <- cgr_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel4yr, cbaseh = cbaseh4yr, pb = TRUE)
+  CGRCUS5yr[[i]] <- cgr_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel5yr, cbaseh = cbaseh5yr,  pb = TRUE)
+  CGRCUS6yr[[i]] <- cgr_cusum(data = subset(datimp, unit == hosps[i]), coxphmod = phmodel6yr, cbaseh = cbaseh6yr,  pb = TRUE)
+  CGRCUS3yr[[i]]$unit <- hosps[i]
+  CGRCUS4yr[[i]]$unit <- hosps[i]
+  CGRCUS5yr[[i]]$unit <- hosps[i]
+  CGRCUS6yr[[i]]$unit <- hosps[i]
+}
+close(pb)
+save(CGRCUS3yr, CGRCUS4yr, CGRCUS5yr, CGRCUS6yr, file = "CGRCUS3456.Rdata")
+```
+
+
+#Determine control limits 
+
+We decided to take h such that alpha = 0.05 in 6 years. 
+
+```{r}
+h_cgr <- cgr_control_limit(time = 6*365, alpha = 0.05, psi = mean(psihosp), n_sim = 200, coxphmod = phmodelfull, baseline_data = datimp, pb = TRUE, ncores = 4, maxtheta = log(6))$h
+#6.8
+
+h_bk <- bk_control_limit(time = 6*365, alpha = 0.05, psi = mean(psihosp), n_sim = 500, theta = log(2), coxphmod = phmodelfull, baseline_data = datimp, pb = TRUE)$h
+#5.1
+
+#We choose h_bern according to van Schie et al:
+h_bern = 3.5
+
+#h_bern = 3.5
+#h_bk = 5.1
+#h_cgr = 6.8
+```
+
+
+#Code above can be ignored by loading:
+
+```{r}
+h_bern = 3.5
+h_bk = 5.07
+h_cgr = 6.81
+load("BERCUS3456.Rdata")
+load("BKCUS3456.Rdata")
+load("CGRCUS3456.Rdata")
+```
+
+#Determine Detection times of BK-CUSUM and CGR-CUSUM at 3 years.
+
+```{r}
+BERdet3yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BERCUS3yr)){
+  tempdat <- BERCUS3yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_ber), unit = tempdat$unit, h = h_ber)
+  BERdet3yr <- rbind(BERdet3yr, tempdf)
+}
+
+BKdet3yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BKCUS3yr)){
+  tempdat <- BKCUS3yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_bk), unit = tempdat$unit, h = h_bk)
+  BKdet3yr <- rbind(BKdet3yr, tempdf)
+}
+
+CGRdet3yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(CGRCUS3yr)){
+  tempdat <- CGRCUS3yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_cgr), unit = tempdat$unit, h = h_cgr)
+  CGRdet3yr <- rbind(CGRdet3yr, tempdf)
+}
+
+times3yrber <- BERdet3yr[which(is.finite(BERdet3yr$time)), c(1,2)]
+times3yrber$time <- ceiling(times3yrber$time/30.5)
+times3yrber <- times3yrber[which(times3yrber$time <= 36),]
+
+times3yrbk <- BKdet3yr[which(is.finite(BKdet3yr$time)), c(1,2)]
+times3yrbk$time <- ceiling(times3yrbk$time/30.5)
+times3yrbk <- times3yrbk[which(times3yrbk$time <= 36),]
+
+times3yrcgr <- CGRdet3yr[which(is.finite(CGRdet3yr$time)), c(1,2)]
+times3yrcgr$time <- ceiling(times3yrcgr$time/30.5)
+times3yrcgr <- times3yrcgr[which(times3yrcgr$time <= 36),]
+```
+
+
+#Determine Detection times of BK-CUSUM and CGR-CUSUM at 4 years.
+
+```{r}
+BERdet4yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BERCUS4yr)){
+  tempdat <- BERCUS4yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_ber), unit = tempdat$unit, h = h_ber)
+  BERdet4yr <- rbind(BERdet4yr, tempdf)
+}
+
+BKdet4yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BKCUS4yr)){
+  tempdat <- BKCUS4yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_bk), unit = tempdat$unit, h = h_bk)
+  BKdet4yr <- rbind(BKdet4yr, tempdf)
+}
+
+CGRdet4yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(CGRCUS4yr)){
+  tempdat <- CGRCUS4yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_cgr), unit = tempdat$unit, h = h_cgr)
+  CGRdet4yr <- rbind(CGRdet4yr, tempdf)
+}
+
+times4yrber <- BERdet4yr[which(is.finite(BERdet4yr$time)), c(1,2)]
+times4yrber$time <- ceiling(times4yrber$time/30.5)
+times4yrber <- times4yrber[which(times4yrber$time <= 48),]
+times4yrber <- times4yrber[-which(times4yrber$unit %in% times3yrber$unit),]
+
+times4yrbk <- BKdet4yr[which(is.finite(BKdet4yr$time)), c(1,2)]
+times4yrbk$time <- ceiling(times4yrbk$time/30.5)
+times4yrbk <- times4yrbk[which(times4yrbk$time <= 48),]
+times4yrbk <- times4yrbk[-which(times4yrbk$unit %in% times3yrbk$unit),]
+
+times4yrcgr <- CGRdet4yr[which(is.finite(CGRdet4yr$time)), c(1,2)]
+times4yrcgr$time <- ceiling(times4yrcgr$time/30.5)
+times4yrcgr <- times4yrcgr[which(times4yrcgr$time <= 48),]
+times4yrcgr <- times4yrcgr[-which(times4yrcgr$unit %in% times3yrcgr$unit),]
+
+```
+
+#Determine Detection times of BK-CUSUM and CGR-CUSUM at 5 years.
+
+```{r}
+BERdet5yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BERCUS5yr)){
+  tempdat <- BERCUS5yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_ber), unit = tempdat$unit, h = h_ber)
+  BERdet5yr <- rbind(BERdet5yr, tempdf)
+}
+
+BKdet5yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BKCUS5yr)){
+  tempdat <- BKCUS5yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_bk), unit = tempdat$unit, h = h_bk)
+  BKdet5yr <- rbind(BKdet5yr, tempdf)
+}
+
+CGRdet5yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(CGRCUS5yr)){
+  tempdat <- CGRCUS5yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_cgr), unit = tempdat$unit, h = h_cgr)
+  CGRdet5yr <- rbind(CGRdet5yr, tempdf)
+}
+
+times5yrber <- BERdet5yr[which(is.finite(BERdet5yr$time)), c(1,2)]
+times5yrber$time <- ceiling(times5yrber$time/30.5)
+times5yrber <- times5yrber[which(times5yrber$time <= 60),]
+times5yrber <- times5yrber[-which(times5yrber$unit %in% times3yrber$unit),]
+times5yrber <- times5yrber[-which(times5yrber$unit %in% times4yrber$unit),]
+
+times5yrbk <- BKdet5yr[which(is.finite(BKdet5yr$time)), c(1,2)]
+times5yrbk$time <- ceiling(times5yrbk$time/30.5)
+times5yrbk <- times5yrbk[which(times5yrbk$time <= 60),]
+times5yrbk <- times5yrbk[-which(times5yrbk$unit %in% times3yrbk$unit),]
+times5yrbk <- times5yrbk[-which(times5yrbk$unit %in% times4yrbk$unit),]
+
+times5yrcgr <- CGRdet5yr[which(is.finite(CGRdet5yr$time)), c(1,2)]
+times5yrcgr$time <- ceiling(times5yrcgr$time/30.5)
+times5yrcgr <- times5yrcgr[which(times5yrcgr$time <= 60),]
+times5yrcgr <- times5yrcgr[-which(times5yrcgr$unit %in% times3yrcgr$unit),]
+times5yrcgr <- times5yrcgr[-which(times5yrcgr$unit %in% times4yrcgr$unit),]
+
+```
+
+
+
+#Determine Detection times of BK-CUSUM and CGR-CUSUM at 6 years.
+
+```{r}
+BERdet6yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BERCUS6yr)){
+  tempdat <- BERCUS6yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_ber), unit = tempdat$unit, h = h_ber)
+  BERdet6yr <- rbind(BERdet6yr, tempdf)
+}
+
+BKdet6yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(BKCUS6yr)){
+  tempdat <- BKCUS6yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_bk), unit = tempdat$unit, h = h_bk)
+  BKdet6yr <- rbind(BKdet6yr, tempdf)
+}
+
+CGRdet6yr <- data.frame(time = double(), unit = integer(), h = double())
+for(i in 1:length(CGRCUS6yr)){
+  tempdat <- CGRCUS6yr[[i]]
+  tempdf <- data.frame(time = runlength(tempdat, h = h_cgr), unit = tempdat$unit, h = h_cgr)
+  CGRdet6yr <- rbind(CGRdet6yr, tempdf)
+}
+
+times6yrber <- BERdet6yr[which(is.finite(BERdet6yr$time)), c(1,2)]
+times6yrber$time <- ceiling(times6yrber$time/30.5)
+times6yrber <- times6yrber[which(times6yrber$time <= 72),]
+times6yrber <- times6yrber[-which(times6yrber$unit %in% times3yrber$unit),]
+times6yrber <- times6yrber[-which(times6yrber$unit %in% times4yrber$unit),]
+times6yrber <- times6yrber[-which(times6yrber$unit %in% times5yrber$unit),]
+
+times6yrbk <- BKdet6yr[which(is.finite(BKdet6yr$time)), c(1,2)]
+times6yrbk$time <- ceiling(times6yrbk$time/30.5)
+times6yrbk <- times6yrbk[which(times6yrbk$time <= 72),]
+times6yrbk <- times6yrbk[-which(times6yrbk$unit %in% times3yrbk$unit),]
+times6yrbk <- times6yrbk[-which(times6yrbk$unit %in% times4yrbk$unit),]
+times6yrbk <- times6yrbk[-which(times6yrbk$unit %in% times5yrbk$unit),]
+
+times6yrcgr <- CGRdet6yr[which(is.finite(CGRdet6yr$time)), c(1,2)]
+times6yrcgr$time <- ceiling(times6yrcgr$time/30.5)
+times6yrcgr <- times6yrcgr[which(times6yrcgr$time <= 72),]
+times6yrcgr <- times6yrcgr[-which(times6yrcgr$unit %in% times3yrcgr$unit),]
+times6yrcgr <- times6yrcgr[-which(times6yrcgr$unit %in% times4yrcgr$unit),]
+times6yrcgr <- times6yrcgr[-which(times6yrcgr$unit %in% times5yrcgr$unit),]
+
+```
+
+\subsection{Detection times for all years}
+
+```{r}
+timesbk <- rbind(times3yrbk, times4yrbk, times5yrbk, times6yrbk)
+timesbk <- timesbk[order(timesbk$unit),]
+
+timescgr <- rbind(times3yrcgr, times4yrcgr, times5yrcgr, times6yrcgr)
+timescgr <- timescgr[order(timescgr$unit),]
+
+timesber <- rbind(times3yrber, times4yrber, times5yrber, times6yrber)
+timesber <- timesber[order(timesber$unit)]
+
+#Input funnel plot detection times manually - can be retrieved from fundet3456yr
+timesfunnel <- data.frame(unit = c(5,9,13,17,22,23,32,37,46,48,74,80,19,39,11,42,58,87,81,63,2,8,73), time = c(rep(36, 13), rep(48, 5), rep(60, 2), rep(72, 3)))
+timesfunnel <- timesfunnel[order(timesfunnel$unit),]
+
+
+times <- data.frame(unit = c(1:96, 98), time_funnel = rep(NA, 97), time_ber = rep(NA, 97), time_bk = rep(NA, 97), time_cgr = rep(NA, 97))
+
+times[which(times$unit %in% timesfunnel$unit),]$time_funnel <- timesfunnel$time
+times[which(times$unit %in% timesber$unit),]$time_ber <- timesber$time
+times[which(times$unit %in% timesbk$unit),]$time_bk <- timesbk$time
+times[which(times$unit %in% timescgr$unit),]$time_cgr <- timescgr$time
+times <- times[-which(is.na(times$time_funnel) & is.na(times$time_ber) & is.na(times$time_bk) & is.na(times$time_cgr)),]
+times <- times[order(times$time_funnel, times$unit, times$time_ber, times$time_bk, times$time_cgr),]
+rownames(times) <- NULL
+
+library(latex2exp)
+times[is.na(times)] <- "\\cellcolor{red}"
+
+times3 <- times[which(times$time_funnel == 36),]
+times4 <- times[which(times$time_funnel <= 48),]
+times5 <- times[which(times$time_funnel <= 60),]
+times6 <- times[which(times$time_funnel <= 72),]
+
+#times can be used to generate Table 3.
+
+
+#Table 4: detection difference in 3 years.
+difffunnel_ber <- times3$time_funnel - times3$time_ber
+difffunnel_bk <- times3$time_funnel - times3$time_bk
+difffunnel_cgr <- times3$time_funnel - times3$time_cgr
+difber_bk <- times3$time_ber - times3$time_bk
+difber_cgr <- times3$time_ber - times3$time_cgr
+difbk_cgr <- times3$time_bk - times3$time_cgr
+
+
+```
+
+```{r}
+library(xtable)
+print(xtable(times, caption = c("Detection speed of charts in months on the LROI data set. Red cells indicate that this method did not yield a detection on the corresponding hospital before $01/01/2020$."), label = c("table:detecttimes"), digits = 0), include.rownames = FALSE)
+```
+
+
+
+
+#Plotting function used to create the Hospital plots.
+
+```{r}
+plot.ALL <- function(chartlist, nameslist, linet = rep("longdash", length(chartlist)), hlist = NULL){
+  library(RColorBrewer)
+  #This function plots together all the elements in the list with different colours.
+  n <- length(chartlist)
+  #library(RColorBrewer)
+  #brewer.pal(7, "BrBG")
+  #cols <- palette.colors(n = n, palette = "ggplot")
+  cols <- brewer.pal(n = n, name = "Dark2")
+  lty <- c("dotdash", "solid", "longdash")
+  finaldat <- data.frame(t = integer(), value = double(), description = factor())
+  for (k in 1:n){
+    if(inherits(chartlist[[k]], "bercusum")){
+      pltGLR <- cbind(as.data.frame(chartlist[[k]]$CUSUM[, c(1,2)]), as.factor(nameslist[k]))
+      names(pltGLR) <- c("t", "value", "description")
+      finaldat <- rbind(finaldat, pltGLR)
+    } else if(inherits(chartlist[[k]], "cgrcusum")){
+      pltGLR <- cbind(as.data.frame(chartlist[[k]]$CGR[, c(1,2)]), as.factor(nameslist[k]))
+      names(pltGLR) <- c("t", "value", "description")
+      finaldat <- rbind(finaldat, pltGLR)
+    } else if(inherits(chartlist[[k]], "bkcusum")){
+      pltBK <- cbind(as.data.frame(chartlist[[k]]$BK), as.factor(nameslist[k]))
+      names(pltBK) <- c("t", "value", "description")
+      finaldat <- rbind(finaldat, pltBK)
+    }
+  }
+  names(cols) = unique(finaldat$description)
+  names(lty) = unique(finaldat$description)
+  colScale <- scale_colour_manual(name = "Chart", values = cols)
+  ltyScale <- scale_linetype_manual(name = "Chart", values = lty)
+  names(finaldat) <- c("t", "value", "description")
+  g <- ggplot(data = finaldat, mapping= aes(x = t, y = value, colour = description, linetype = description)) + geom_line(size = 1.2) + colScale + ltyScale
+  if(!is.null(hlist)){
+    for(j in 1:length(hlist)){
+      g <- g+ geom_hline(yintercept = hlist[j], colour = cols[j], linetype = linet[j], size = 1.2)
+    }
+  }
+  return(g)
+}
+```
+
+
+#Create plots for 4 different hospitals. Figure 1
+
+\subsection{Hospital 5}
+
+```{r}
+#Create pictures in 700x500 pxs
+ber5 <- bernoulli_cusum(data = subset(datimp, unit == 5), followup = 365, glmmod = glmmod3yr, theta = log(2))
+cgr5 <- cgr_cusum(data = subset(datimp, unit == 5), coxphmod = phmodel3yr, ctimes = seq(0, 3*365, 1), stoptime = 3*365, pb = TRUE)
+bk5 <- bk_cusum(data = subset(datimp, unit == 5), coxphmod = phmodel3yr, ctimes = seq(0, 3*365, 1), stoptime = 3*365, pb = TRUE, theta = log(2))
+c <- plot.ALL(chartlist = list(ber5,  bk5, cgr5), nameslist = c("Ber CUSUM", "BK-CUSUM", "CGR-CUSUM"), hlist = c(3.5, h_bk, h_cgr), linet = c("dotdash", "solid", "longdash")) + labs(title = "Hospital 5 control charts", subtitle = "Not detected by BK- and CGR-CUSUM",  x= "time", y = "value" )     + xlab("Time (Days)") + ylab("Value") +  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+  theme(axis.title.x = element_text(size = 16), axis.text.x = element_text(hjust=1)) +  theme(axis.title.y = element_text(size = 16))+theme(text = element_text(size=16))  + theme(legend.position = c(0.2, 0.85), legend.text = element_text(size = 11), legend.key.size = unit(0.6, "cm")) + guides(linetype = guide_legend(override.aes = list(size = 1)))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(0.8, "cm")) + xlim(c(0, 3*365))
+
+
+```
+
+
+\subsection{Hospital 68}
+
+```{r}
+#Create pictures in 700x500 pxs
+ber68 <- bernoulli_cusum(data = subset(datimp, unit == 68), followup = 365, glmmod = glmmod6yr, theta = log(2), stoptime = 6*365)
+cgr68 <- cgr_cusum(data = subset(datimp, unit == 68), coxphmod = phmodel6yr, ctimes = seq(0, 6*365, 1), pb = TRUE)
+bk68 <- bk_cusum(data = subset(datimp, unit == 68), coxphmod = phmodel6yr, ctimes = seq(0, 6*365, 1),  pb = TRUE, theta = log(2))
+d <- plot.ALL(chartlist = list(ber68,  bk68, cgr68), nameslist = c("Ber CUSUM", "BK-CUSUM", "CGR-CUSUM"), hlist = c(3.5, h_bk, h_cgr), linet = c("dotdash", "solid", "longdash")) + labs(title = "Hospital 68 control charts", subtitle = "Only detected by BK-CUSUM",  x= "time", y = "value" )     + xlab("Time (Days)") + ylab("Value") +  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+  theme(axis.title.x = element_text(size = 16), axis.text.x = element_text(hjust=1)) +  theme(axis.title.y = element_text(size = 16))+theme(text = element_text(size=16))  + theme(legend.position = c(0.2, 0.85), legend.text = element_text(size = 11), legend.key.size = unit(0.6, "cm")) + guides(linetype = guide_legend(override.aes = list(size = 1)))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(0.8, "cm")) 
+
+```
+
+
+\subsection{Hospital 83}
+
+```{r}
+#Create pictures in 700x500 pxs
+ber83 <- bernoulli_cusum(data = subset(datimp, unit == 83), followup = 365, glmmod = glmmod6yr, theta = log(2), stoptime = 5*365)
+cgr83 <- cgr_cusum(data = subset(datimp, unit == 83), coxphmod = phmodel6yr, ctimes = seq(0, 5*365, 1), pb = TRUE)
+bk83 <- bk_cusum(data = subset(datimp, unit == 83), coxphmod = phmodel6yr, ctimes = seq(0, 5*365, 1),  pb = TRUE, theta = log(2))
+e <- plot.ALL(chartlist = list(ber83,  bk83, cgr83), nameslist = c("Ber CUSUM", "BK-CUSUM", "CGR-CUSUM"), hlist = c(3.5, h_bk, h_cgr), linet = c("dotdash", "solid", "longdash")) + labs(title = "Hospital 83 control charts", subtitle = "Only detected by CGR-CUSUM",  x= "time", y = "value" )     + xlab("Time (Days)") + ylab("Value") +  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+  theme(axis.title.x = element_text(size = 16), axis.text.x = element_text(hjust=1)) +  theme(axis.title.y = element_text(size = 16))+theme(text = element_text(size=16))  + theme(legend.position = c(0.2, 0.85), legend.text = element_text(size = 11), legend.key.size = unit(0.6, "cm")) + guides(linetype = guide_legend(override.aes = list(size = 1)))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(0.8, "cm")) 
+
+```
+
+
+\subsection{Hospital 42}
+
+```{r}
+#Create pictures in 700x500 pxs
+ber42 <- bernoulli_cusum(data = subset(datimp, unit == 42), followup = 365, glmmod = glmmod4yr, theta = log(2), stoptime = 4*365)
+cgr42 <- cgr_cusum(data = subset(datimp, unit == 42), coxphmod = phmodel4yr, ctimes = seq(0, 4*365, 1), pb = TRUE)
+bk42 <- bk_cusum(data = subset(datimp, unit == 42), coxphmod = phmodel4yr, ctimes = seq(0, 4*365, 1),  pb = TRUE, theta = log(2))
+f <- plot.ALL(chartlist = list(ber42,  bk42, cgr42), nameslist = c("Ber CUSUM", "BK-CUSUM", "CGR-CUSUM"), hlist = c(3.5, h_bk, h_cgr), linet = c("dotdash", "solid", "longdash")) + labs(title = "Hospital 42 control charts", subtitle = "Only detected by funnel plot",  x= "time", y = "value" )     + xlab("Time (Days)") + ylab("Value") +  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+  theme(axis.title.x = element_text(size = 16), axis.text.x = element_text(hjust=1)) +  theme(axis.title.y = element_text(size = 16))+theme(text = element_text(size=16))  + theme(legend.position = c(0.2, 0.85), legend.text = element_text(size = 11), legend.key.size = unit(0.6, "cm")) + guides(linetype = guide_legend(override.aes = list(size = 1)))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(0.8, "cm")) 
+
+```

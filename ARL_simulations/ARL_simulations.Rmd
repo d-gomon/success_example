@@ -1,0 +1,814 @@
+---
+title: "CTCUSUM vs CTGLR"
+author: "Daniel Gomon"
+date: "30/10/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Clarification for the reader: initially we called the BK-CUSUM the CTCUSUM and the CGR-CUSUM was called the CTMAXGLR, the CGI-CUSUM was called the CTGLR.
+
+#Load ALLFUNCTIONS.Rmd, contains all functions used in this script.
+
+```{r, echo = FALSE}
+rmarkdown::render("ALLFUNCTIONS.Rmd")
+```
+
+\section{Comparing the BK-CUSUM chart with the CGR/CGI-CUSUM chart}
+In this file we will compare the BK-CUSUM chart with the CGR/CGI-CUSUM chart using $3000$ institutions with arrival rate $\psi = \frac{2500}{1095}$ with failure time distributed exponentially with rate $\lambda = 0.002$. We will consider the alternative hypothesis $\mu = \ln(1.4)$, where we construct the CUSUM with values $\theta \in \ln(\{1.1, 1.2, 1.3, 1.4, 1.5, 1.6\})$.
+
+\subsection{Creating the 3000 in-control hospitals and out-of-control hospitals for each value of theta}
+
+Under null-hypothesis $\mu = \ln(1) = 0$.
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H0 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H0, file = "HOSPITALS3KEXP002H0.Rdata")
+```
+
+Under Alternative hypothesis $\mu = \ln(1.2)$
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H12 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1.2))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H12, file = "HOSPITALS3KEXP002H12.Rdata")
+```
+
+
+Under Alternative hypothesis $\mu = \ln(1.4)$
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H14 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1.4))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H14, file = "HOSPITALS3KEXP002H14.Rdata")
+```
+
+
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H16 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1.6))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H16, file = "HOSPITALS3KEXP002H16.Rdata")
+```
+
+
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H18 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1.8))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H18, file = "HOSPITALS3KEXP002H18.Rdata")
+```
+
+
+
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H20 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(2))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H20, file = "HOSPITALS3KEXP002H20.Rdata")
+```
+
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H22 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(2.2))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H22, file = "HOSPITALS3KEXP002H22.Rdata")
+```
+
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+HOSPITALS3KEXP002H24 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(2.4))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H24, file = "HOSPITALS3KEXP002H24.Rdata")
+
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+HOSPITALS3KEXP002H26 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(2.6))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H26, file = "HOSPITALS3KEXP002H26.Rdata")
+
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+HOSPITALS3KEXP002H28 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(2.8))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H28, file = "HOSPITALS3KEXP002H28.Rdata")
+
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+HOSPITALS3KEXP002H30 <- foreach(j=1:3000) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  test2 <- gendatapoiss(psi = 2500/1095, t = 2000, coeffgen = coefficients, 
+                         invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(3))
+  test2
+}
+stopCluster(cl)
+save(HOSPITALS3KEXP002H30, file = "HOSPITALS3KEXP002H30.Rdata")
+```
+
+
+  
+\section{Determining control limits}
+We would like to determine values for the control limits $h$ for the charts so that we can simulate detection speeds of both CGR/CGI- and BK-CUSUM charts.
+
+\subsection{BK-CUSUM}
+The "CTCUSUMcont" function keeps generating new data until at some point the control limit is surpassed. We therefore choose a control limit higher than the "true" control limit and determine the run length for $3000$ in-control hospitals using this control limit.
+For the BK-CUSUM chart with $\theta = \ln(1.4)$ and $h = 8$ under the null hypothesis.
+We take $h = 8$ as we know from running a few sample calculations that the final control limit will be smaller than $8$
+
+
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+CONTCUSVOORH0THETA14h8 <- foreach(j=1:3000) %dopar% {
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  set.seed(j)
+  a <- CTCUSUMcont(psi= 2500/1095, t = 1000, coeffsgen = c(0), invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1), gendata = gendatapoiss, coeffchart = c(0), cbaseh = function(t) chazexponential(t, lambda = 0.002), theta = log(1.4), h = 8)
+  a
+}
+stopCluster(cl)
+save(CONTCUSVOORH0THETA14h8, file = "E:/Scriptie/CONTCUSVOORH0THETA14h8.Rdata")
+```
+
+Same for $\theta = \ln(1.8)$, but now with control limit $h = 9$.
+
+
+```{r, include = FALSE}
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+CONTCUSVOORH0THETA18h9 <- foreach(j=1:2000) %dopar% {
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  set.seed(j)
+  a <- CTCUSUMcont(psi= 2500/1095, t = 1000, coeffsgen = c(0), invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1), gendata = gendatapoiss, coeffchart = c(0), cbaseh = function(t) chazexponential(t, lambda = 0.002), theta = log(1.8), h = 9)
+  a
+}
+stopCluster(cl)
+save(CONTCUSVOORH0THETA18h9, file = "E:/Scriptie/CONTCUSVOORH0THETA18h9.Rdata")
+```
+
+\subsection{CGI/CGR-CUSUM}
+
+For the CGR-CUSUM chart with $h = 8$ under the null hypotesis.
+"CTMAXGLRcont" is the analogue of "CTCUSUMcont".
+
+```{r, include = FALSE}
+#Not run, takes too long, split into different files
+libary(foreach)
+library(doParallel)
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+CONTMAXGLRVOORH0h8 <- foreach(j=1:3000) %dopar% {
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  a <- CTMAXGLRcont(psi= 2500/1095, t = 1000, coeffsgen = c(0), invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1), gendata = gendatapoiss, coeffchart = c(0), cbaseh = function(t) chazexponential(t, lambda = 0.002),  h = 8)
+  filenam <- paste0("D:/Scriptie/", "CTMAXGLR", as.character(j), ".Rdata" )
+  #CGR-CUSUM runtime is quite long, so we save intermediary results.
+  save(a, file = filenam)
+  rm(nam)
+  t <- 1
+  return(t)
+}
+stopCluster(cl)
+```
+
+
+
+
+
+
+
+\section{Apply BK-CUSUM to data sets with alternative hypothesis failure rates.}
+
+```{r}
+hypoths <- c("12", "14", "16", "18", "20", "22", "24", "26", "28", "30")
+for(i in 1:length(hypoths)){
+  print(i)
+  cores=detectCores()
+  cl <- makeCluster(cores[1]-1) #not to overload your computer
+  registerDoParallel(cl)
+  load(paste0("HOSPITALS3KEXP002H", hypoths[i], ".Rdata"))
+  hypoths <- c("12", "14", "16", "18", "20", "22", "24", "26", "28", "30")
+  assign("test1", eval(parse(text = paste0("HOSPITALS3KEXP002H", hypoths[i]))))
+  rm(list = eval(paste0("HOSPITALS3KEXP002H", hypoths[i])))
+  Chartseval <- foreach(j=1:length(test1)) %dopar% {
+    print("asd")
+    coefficients <- c(1)
+    chazexponential <- function(t, lambda){
+      return(lambda * t)
+    }
+    invchazexponential <- function(t, lambda){
+      return(t/lambda)
+    }
+    test <- test1[[j]]
+    #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+    #The baseline hazard rate is assumed to be exponential with rate 0.002
+    outpCUS <- lapply(log(c(1.4, 1.8)), function(x) CTCUSUMsim(test, coefficients = c(1), cbaseh = function(t) chazexponential(t, lambda = 0.002), theta = x, n = 2000, h = 9))
+    outpCUS
+  }
+  assign(paste0("EvalChartsCUSUMH", hypoths[i]), Chartseval)
+  save(list = eval(paste0("EvalChartsCUSUMH", hypoths[i])), file = paste0("EvalChartsCUSUMH", hypoths[i], ".Rdata"))
+  stopCluster(cl)
+  rm(Chartseval)
+}
+```
+
+\section{Apply CGI-CUSUM to data sets with alternative hypothesis failure rates.}
+
+```{r}
+load("HOSPITALS3KEXP002H12.Rdata")
+load("HOSPITALS3KEXP002H14.Rdata")
+load("HOSPITALS3KEXP002H16.Rdata")
+load("HOSPITALS3KEXP002H18.Rdata")
+load("HOSPITALS3KEXP002H20.Rdata")
+load("HOSPITALS3KEXP002H22.Rdata")
+load("HOSPITALS3KEXP002H24.Rdata")
+load("HOSPITALS3KEXP002H26.Rdata")
+load("HOSPITALS3KEXP002H28.Rdata")
+load("HOSPITALS3KEXP002H30.Rdata")
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+EvalChartsGLR <- foreach(j=1:length(HOSPITALS3KEXP002H14)) %dopar% {
+  coefficients <- c(1)
+  chazexponential <- function(t, lambda){
+    return(lambda * t)
+  }
+  invchazexponential <- function(t, lambda){
+    return(t/lambda)
+  }
+  test <- list(HOSPITALS3KEXP002H12[[j]],HOSPITALS3KEXP002H14[[j]],HOSPITALS3KEXP002H16[[j]],HOSPITALS3KEXP002H18[[j]],HOSPITALS3KEXP002H20[[j]],HOSPITALS3KEXP002H22[[j]],HOSPITALS3KEXP002H24[[j]],HOSPITALS3KEXP002H26[[j]],HOSPITALS3KEXP002H28[[j]],HOSPITALS3KEXP002H30[[j]])
+  #We choose to perform simulations with about 2500 primary procedures per 1095 time points
+  #The baseline hazard rate is assumed to be exponential with rate 0.002
+  outpGLR <- lapply(test, function(x) CTGLRsim(x, coefficients = c(1), cbaseh = function(t) chazexponential(t, lambda = 0.002), n = 2000, h = 9))
+  outpGLR
+}
+stopCluster(cl)
+save(EvalChartsGLR, file = "EvalChartsGLR.Rdata")
+```
+
+
+
+
+
+
+
+
+
+
+\section{Looking at the ARL as a function of h under H0}
+
+\subsection{BK-CUSUM}
+
+
+```{r}
+load("CONTCUSVOORH0THETA14h8.Rdata")
+load("CONTCUSVOORH0THETA18h9.Rdata")
+```
+
+```{r}
+hseq <- seq(5, 8, by = 0.01)
+ARLh14 <- numeric(length(hseq))
+for(i in 1:length(hseq)){
+  runtimcusum <- sapply(CONTCUSVOORH0THETA14h8, function(x) RLfromh(x, h = hseq[i]))
+  ARLh14[i] <- mean(runtimcusum)
+}
+hseq2 <- seq(5, 9, by = 0.01)
+ARLh18 <- numeric(length(hseq))
+for(i in 1:length(hseq2)){
+  runtimcusum <- sapply(CONTCUSVOORH0THETA18h9, function(x) RLfromh(x, h = hseq2[i]))
+  ARLh18[i] <- mean(runtimcusum)
+}
+```
+
+```{r}
+plot(hseq, ARLh14)
+plot(hseq2, ARLh18)
+```
+
+
+
+\subsection{CGR-CUSUM}
+
+```{r, include = FALSE}
+CONTMAXGLRVOORH0h8 <- list()
+for(i in 1:3000){
+  load(file = paste0("E:/Scriptie/OLD/CTMAXGLRnieuw",as.character(i),".Rdata"))
+  CONTMAXGLRVOORH0h8[[i]] <- a
+  rm(a)
+}
+
+save(CONTMAXGLRVOORH0h8, file = "CONTMAXGLRVOORH0h8.Rdata")
+```
+
+```{r}
+load("CONTMAXGLRVOORH0h8.Rdata")
+```
+
+```{r}
+hseq <- seq(5, 8, by = 0.01)
+ARLhMAXGLR <- numeric(length(hseq))
+for(i in 1:length(hseq)){
+  runtimMAXGLR <- sapply(CONTMAXGLRVOORH0h8, function(x) RLfromh(x, h = hseq[i]))
+  ARLhMAXGLR[i] <- mean(runtimMAXGLR)
+}
+plot(hseq, ARLhMAXGLR)
+plot(hseq, log(ARLhMAXGLR))
+```
+
+\subsection{Determining the values of h for ARL0 to be 15 years}
+We would like to determine values of h for the BK-CUSUM and CGR-CUSUM so that ARL0 is 15 years. We do this as follows:
+```{r}
+year15 <- 365*15
+hcus14 <- hseq[which.max(ARLh14 >= year15)] #6.82
+hcus18 <- hseq2[which.max(ARLh18 >= year15)] #8.35
+hMAXGLR <- hseq[which.max(ARLhMAXGLR >= year15)] #7.73
+```
+
+
+
+
+\section{Table for comparing ARL}
+
+\subsection{BK-CUSUM}
+```{r}
+CUSrows <- data.frame(NULL,theta = double(), emu = double(), RL = double(), h = double())
+hypoths <- c("12", "14", "16", "18", "20", "22", "24", "26", "28", "30")
+hcus14 <- 6.82
+hcus18 <- 8.35
+hcus <- c(hcus14, hcus18)
+for(k in 1:length(hypoths)){
+  load(paste0("EvalChartsCUSUMH", hypoths[k], ".Rdata"))
+  assign("test", eval(parse(text = paste0("EvalChartsCUSUMH", hypoths[k]))))
+  rm(list = eval(paste0("EvalChartsCUSUMH", hypoths[k])))
+  for(i in 1:length(test)){
+    for(j in 1:length(test[[i]])){
+      chart <- test[[i]][[j]]
+      outp <- c("theta"= exp(chart$theta), "emu" = as.integer(hypoths[k])/10, "RL" = RLfromh(chart, h = hcus[j]), "h" = hcus[j])
+      CUSrows <- rbind(CUSrows, outp)
+    }
+  }
+  rm(test)
+}
+colnames(CUSrows) = c("theta", "emu", "RL", "h")
+save(CUSrows, file = "CUSrows.Rdata")
+```
+
+
+
+\subsection{CGI-CUSUM}
+
+```{r}
+load("EvalChartsGLR.Rdata")
+hmaxGLR <- 7.73
+GLRrows <- data.frame(NULL, emu = double(), RL = double(), h = double())
+emu <- seq(1.2, 3, by = 0.2)
+for(i in 1:length(EvalChartsGLR)){
+  for(j in 1:length(EvalChartsGLR[[i]])){
+    chart <- EvalChartsGLR[[i]][[j]]
+    outp <- c( "emu" = emu[j], "RL" = RLfromh(chart, h = hmaxGLR), "h" = hmaxGLR)
+    GLRrows <- rbind(GLRrows,outp)
+  }
+}
+colnames(GLRrows) = c( "emu", "RL", "h")
+save(GLRrows, file = "GLRrows.Rdata")
+
+```
+
+\subsection{Under null hypothesis}
+
+```{r}
+hcus14 <- 6.82
+hcus16 <- 7.67
+hcus18 <- 8.35
+hcus = c(hcus14, hcus16, hcus18)
+CUSnullrows <- data.frame(NULL,theta = double(), emu = double(), RL = double(), h = double())
+load("CONTCUSVOORH0THETA14h8.Rdata")
+load("CONTCUSVOORH0THETA16h8.Rdata")
+load("CONTCUSVOORH0THETA18h9.Rdata")
+for(i in 1:length(CONTCUSVOORH0THETA14h8)){
+  chart <- CONTCUSVOORH0THETA14h8[[i]]
+  outp <- c("theta"= exp(chart$theta), "emu" = 1, "RL" = RLfromh(chart, h = hcus[1]), "h" = hcus[1])
+  CUSnullrows <- rbind(CUSnullrows,outp)
+}
+for(i in 1:length(CONTCUSVOORH0THETA16h8)){
+  chart <- CONTCUSVOORH0THETA16h8[[i]]
+  outp <- c("theta"= exp(chart$theta), "emu" = 1, "RL" = RLfromh(chart, h = hcus[2]), "h" = hcus[2])
+  CUSnullrows <- rbind(CUSnullrows,outp)
+}
+for(i in 1:length(CONTCUSVOORH0THETA18h9)){
+  chart <- CONTCUSVOORH0THETA18h9[[i]]
+  outp <- c("theta"= exp(chart$theta), "emu" = 1, "RL" = RLfromh(chart, h = hcus[3]), "h" = hcus[3])
+  CUSnullrows <- rbind(CUSnullrows,outp)
+}
+colnames(CUSnullrows) = c( "theta", "emu", "RL", "h")
+```
+
+```{r}
+hmaxGLR <- 7.73
+GLRnullrows <- data.frame(NULL, emu = double(), RL = double(), h = double())
+for(i in 1:length(CONTMAXGLRVOORH0h8)){
+  chart <- CONTMAXGLRVOORH0h8[[i]]
+  outp <- c( "emu" = 1, "RL" = RLfromh(chart, h = hmaxGLR), "h" = hmaxGLR)
+  GLRnullrows <- rbind(GLRnullrows,outp)
+}
+colnames(GLRnullrows) = c( "emu", "RL", "h")
+save(CUSnullrows, GLRnullrows, file = "nullrows.Rdata")
+```
+
+
+\section{Theoretical ARL}
+
+Suppose we want to determine the ARL of CTCUSUM when $\mu = \ln(1.4)$ and $\theta \in \{\ln(1.2), \ln(1.4), \ln(1.6)}$ and the ARL of CTGLR when $\mu = \ln(1.4)$. We use exponentialy distributed failure times with rate 0.002 and $\psi = 2500/1095$.
+
+\subsection{CTCUSUM}
+
+```{r}
+library(pracma)
+omegaCTGLR <- function(omega, theta, mu){
+ omega * (exp(theta) - 1) + exp(mu)*(exp(-omega*theta) - 1) 
+}
+diffomegaCTGLR <- function(omega, theta, mu){
+  exp(theta) - 1 - theta*exp(mu)*exp(-omega*theta)
+}
+omega <- newtonRaphson(fun = function(x) omegaCTGLR(x, theta = theta, mu = mu), x0=-10, dfun = function(x) diffomegaCTGLR(x, theta = theta, mu = mu))$root
+
+plotseq <- seq(-3, 10, by = 0.01)
+plot(plotseq, omegaCTGLR(plotseq, theta = log(2), mu = log(1.22)))
+```
+
+```{r}
+TheorARLCTCUSUM <- function(h, theta, mu, psi, cdfobs, C){
+  #C is untill which time we consider the CUSUM
+  Fi <- cdfobs(t = C, mu = mu)
+  gammac <- exp(-mu)*psi * Fi
+  nu = (theta * exp(mu) - exp(theta) + 1) * gammac
+  if (nu == 0){
+    return((h^2* exp(-mu))/(theta^2 * gammac))
+  } else{
+      library(pracma)
+      omegaCTGLR <- function(omega, theta, mu){
+        omega * (exp(theta) - 1) + exp(mu)*(exp(-omega*theta) - 1) 
+      }
+      diffomegaCTGLR <- function(omega, theta, mu){
+        exp(theta) - 1 - theta*exp(mu)*exp(-omega*theta)
+      }
+      omega <- newtonRaphson(fun = function(x) omegaCTGLR(x, theta = theta, mu = mu), x0=100, dfun = function(x) diffomegaCTGLR(x, theta = theta, mu = mu))$root
+      if(abs(omega) < 1e-4){
+        omega <- newtonRaphson(fun = function(x) omegaCTGLR(x, theta = theta, mu = mu), x0=-100, dfun = function(x) diffomegaCTGLR(x, theta = theta, mu = mu))$root
+      }
+      finval <- h/nu - ((exp(theta - mu) - exp(-mu))/nu)*((1-exp(-omega*h))/(1-exp(-omega*theta)))
+      return(c(finval, omega))
+    }
+}
+```
+
+We compare to the results written in Biswas \& Kalbfleisch
+
+```{r}
+a <- TheorARLCTCUSUM(h = 4.35, theta = log(2), mu = log(1.5), psi = 100, cdfobs = function(t, mu) cdfexp(t, mu,  lambda = -log(0.9)), C = 3)
+b <- mean(replicate(50,CTCUSUMcont(psi= 100/365, t = 1000, coeffsgen = c(0), invchaz = function(t) invchazexponential(t, lambda = -log(0.9)/365), mugen = log(1.5), gendata = gendatapoiss, coeffchart = c(0), cbaseh = function(t) chazexponential(t, lambda = -log(0.9)/365), theta = log(2), h = 4.35)$runtime))/365
+```
+
+\subsection{CTGLR}
+
+```{r}
+#Use the fundamental theorem of calculus
+TheorARLCTGLR <- function(h, mu, psi, intcdf, cdfobs){
+  library(pracma)
+  expecGLR <- function(t, mu, psi, intcdf, h){
+    return((mu + exp(-mu) - 1)* psi * intcdf(t =t, mu = mu, lambda = 0.002) - h)
+  }
+  diffexpecGLR <- function(t, mu, psi, cdfobs){
+    return((mu + exp(-mu) - 1)*psi * cdfobs(t, mu = mu, lambda = 0.002))
+  }
+  ARL <- tryCatch(newtonRaphson(fun = function(t) expecGLR(t, mu = mu, psi = psi, intcdf = intcdf, h=h), x0 = 10, dfun = function(t) diffexpecGLR(t, mu = mu, psi = psi, cdfobs = cdfobs), maxiter = 10000)$root, error = function(cond) return(Inf))
+  return(ARL)
+}
+```
+
+#Works well
+```{r}
+TheorARLCTGLR(h = 10,  mu = log(1.4), psi = 2500/1095, intcdf = integcdfexp, cdfobs =cdfexp)
+mean(replicate(30,CTGLRcont(psi= 2500/1095, t = 1000, coeffsgen = c(0), invchaz = function(t) invchazexponential(t, lambda = 0.002), mugen = log(1.4), gendata = gendatapoiss, coeffchart = c(0), cbaseh = function(t) chazexponential(t, lambda = 0.002),  h = 10)$runtime))
+```
+
+\subsection{CTCUSUMnew}
+Theor ARL using our ARL for the CTCUSUM.
+
+```{r}
+#Use the fundamental theorem of calculus
+TheorARLCTCUSUMv2 <- function(h, mu, theta, psi, intcdf, cdfobs){
+  library(pracma)
+  expecGLR <- function(t, mu, theta, psi, intcdf, h){
+    return((theta + exp(-mu) - (exp(theta)/exp(mu)))* psi * intcdf(t =t, mu = mu, lambda = 0.002) - h)
+  }
+  diffexpecGLR <- function(t, mu, theta, psi, cdfobs){
+    return((theta + exp(-mu) - (exp(theta)/exp(mu)))*psi * cdfobs(t, mu = mu, lambda = 0.002))
+  }
+  ARL <- tryCatch(newtonRaphson(fun = function(t) expecGLR(t, mu = mu, theta = theta, psi = psi, intcdf = intcdf, h=h), x0 = 10, dfun = function(t) diffexpecGLR(t, mu = mu, theta = theta, psi = psi, cdfobs = cdfobs), maxiter = 1000)$root, warning = function(cond){return(Inf)})
+  return(ARL)
+}
+```
+
+
+
+
+\section{Creating the Final Tables}
+
+In this section we summarise above simulation results in a table.
+```{r}
+load("CUSrows.Rdata")
+load("GLRrows.Rdata")
+hcus14 <- 6.82
+hcus16 <- 7.67
+hcus18 <- 8.35
+hmaxGLR <- 7.73
+```
+
+\subsection{For the CTCUSUM with $\theta = \ln(1.4)$}
+```{r}
+FinalTableCUS14 <- data.frame(NULL, ARL = double(), SD = double(), MRL = double(), TheorKB = double(), Theor = double())
+tempdat <- subset(CUSrows, theta == 1.4)
+for(i in unique(tempdat$emu)){
+  temptemp <- subset(tempdat, emu == i)
+  ARL <- round(mean(temptemp$RL))
+  SD <- round(sd(temptemp$RL))
+  MRL <- round(median(temptemp$RL))
+  TheorKB <- round(TheorARLCTCUSUM(h = hcus14, theta = log(1.4), mu = log(i), psi = 2500/1095, cdfobs = function(t, mu) cdfexp(t, mu,  lambda = 0.002), C = 365)[1])
+  Theor <- round(TheorARLCTCUSUMv2(h = hcus14,  mu = log(i), theta = log(1.4), psi = 2500/1095, intcdf = integcdfexp, cdfobs =cdfexp))
+  outp <- c( ARL, SD, MRL, Theor, TheorKB)
+  FinalTableCUS14 <- rbind(FinalTableCUS14,outp)
+}
+colnames(FinalTableCUS14) = c("ARL", "SD", "MRL",  "Theor", "TheorKB (C=1)")
+rownames(FinalTableCUS14) = unique(tempdat$emu)
+```
+
+
+
+
+\subsection{For the CTCUSUM with $\theta = \ln(1.8)$}
+```{r}
+FinalTableCUS18 <- data.frame(NULL, ARL = double(), SD = double(), MRL = double(), TheorKB = double(), Theor = double())
+tempdat <- subset(CUSrows, theta == 1.8)
+for(i in unique(tempdat$emu)){
+  temptemp <- subset(tempdat, emu == i)
+  ARL <- round(mean(temptemp$RL[is.finite(temptemp$RL)]))
+  SD <- round(sd(temptemp$RL[is.finite(temptemp$RL)]))
+  MRL <- round(median(temptemp$RL))
+  TheorKB <- round(TheorARLCTCUSUM(h = hcus18, theta = log(1.8), mu = log(i), psi = 2500/1095, cdfobs = function(t, mu) cdfexp(t, mu,  lambda = 0.002), C = 365)[1])
+  Theor <- round(TheorARLCTCUSUMv2(h = hcus18,  mu = log(i), theta = log(1.8), psi = 2500/1095, intcdf = integcdfexp, cdfobs =cdfexp))
+  outp <- c( ARL, SD, MRL, Theor, TheorKB)
+  FinalTableCUS18 <- rbind(FinalTableCUS18,outp)
+}
+colnames(FinalTableCUS18) = c("ARL", "SD", "MRL",  "Theor", "TheorKB (C=1)")
+rownames(FinalTableCUS18) = unique(tempdat$emu)
+```
+
+\subsection{For the CTGLR}
+```{r}
+FinalTableGLR <- data.frame(NULL, ARL = double(), SD = double(), MRL = double(), Theor = double())
+for(i in unique(GLRrows$emu)){
+  temptemp <- subset(GLRrows, emu == i)
+  ARL <- round(mean(temptemp$RL))
+  SD <- round(sd(temptemp$RL))
+  MRL <- round(median(temptemp$RL))
+  Theor <- round(TheorARLCTGLR(h = hmaxGLR,  mu = log(i), psi = 2500/1095, intcdf = integcdfexp, cdfobs =cdfexp))
+  outp <- c( ARL, SD, MRL, Theor)
+  FinalTableGLR <- rbind(FinalTableGLR,outp)
+}
+colnames(FinalTableGLR) = c("ARL", "SD", "MRL", "Theor")
+rownames(FinalTableGLR) = unique(GLRrows$emu)
+```
+
+```{r}
+asd <- cbind(FinalTableCUS14, FinalTableCUS18, FinalTableGLR)
+```
+
+\section{Under the null hypothesis}
+
+```{r}
+load("nullrows.Rdata")
+Finalrow <- numeric(0)
+tempdat <- CUSnullrows
+for(i in unique(tempdat$theta)){
+  temptemp <- subset(tempdat, theta == i)
+  ARL <- round(mean(temptemp$RL[is.finite(temptemp$RL)]))
+  SD <- round(sd(temptemp$RL[is.finite(temptemp$RL)]))
+  MRL <- round(median(temptemp$RL))
+  TheorKB <- round(TheorARLCTCUSUM(h = temptemp$h[1], theta = log(i), mu = log(1), psi = 2500/1095, cdfobs = function(t, mu) cdfexp(t, mu,  lambda = 0.002), C = 365)[1])
+  Theor <- round(TheorARLCTCUSUMv2(h = temptemp$h[1],  mu = log(1), theta = log(i), psi = 2500/1095, intcdf = integcdfexp, cdfobs =cdfexp))
+  outp <- c( ARL, SD, MRL, Theor, TheorKB)
+  Finalrow <- c(Finalrow,outp)
+}
+temptemp <- GLRnullrows
+ARL <- round(mean(temptemp$RL))
+SD <- round(sd(temptemp$RL))
+MRL <- round(median(temptemp$RL))
+Theor <- round(TheorARLCTGLR(h = hmaxGLR,  mu = log(1), psi = 2500/1095, intcdf = integcdfexp, cdfobs =cdfexp))
+outp <- c( ARL, SD, MRL, Theor)
+Finalrow <- c(Finalrow,outp)
+
+```
+
+```{r}
+Finalrow
+```
+
+asd and finalrow compose Table 3, the main simulation result of this thesis.
+
+
+
+
+
+
+
+
+
+

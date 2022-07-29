@@ -1,0 +1,373 @@
+---
+title: "LROI_Power"
+author: "Daniel Gomon"
+date: "5 April 2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Import the Dutch Arthroplasty Register data - data set is confidential, requested under agreement LROI 2020-053
+
+```{r}
+rmarkdown::render("Data.Rmd")
+```
+
+
+#Used success package version 0.1.0 for this script. Source files attached on github.
+
+```{r}
+#install.packages("C:/Users/danie/OneDrive - Universiteit Leiden/CGRCUSUM/Biostat_RCode/success_0.1.0.tar.gz", repos = NULL, type="source") 
+library(success)
+```
+
+
+# Determine RA models:
+```{r}
+library(survival)
+varsanalysis <- c("age", "Gender", "BMI", "ASA_Class", "Charnley_Score", "Diagnosis", "Smoker")
+exprfit <- as.formula(paste("Surv(Xi, Status) ~" ,paste(varsanalysis, collapse='+')))
+exprfitglm <- as.formula(paste("(Xi <= 365) & (Status == 1)~" ,paste(varsanalysisfunnel, collapse='+')))
+coxmod <- coxph(exprfit, data= subset(datimp, Si + 365 < 6*365))
+glmmod <- glm(exprfitglm, data= subset(datimp, Si + 365 < 6*365), family = binomial(link = "logit"))
+```
+
+# Determine control limits
+```{r}
+hmat <- matrix(c(2.62, 3.71, 4.34, 4.72,
+                 3.15, 4.19, 4.76, 5.41,
+                 4.64, 5.81, 6.34, 6.79,
+                 7.31, 7.73, 8.27, 8.54,
+                 4.68, 5.79, 6.51, 6.69),nrow = 4, ncol = 5)
+psivals <- c(0.2, 0.6, 1, 1.7)
+rownames(hmat) <- psivals
+colnames(hmat) <- c("BerCUSUM", "BKCUSUM2", "BKCUSUM4", "CGRCUSUM", "CGRCUSUM6")
+```
+
+
+Bernoulli CUSUM:
+```{r}
+for(i in 1:4){
+  tem <- bernoulli_control_limit(time = 6*365, alpha = 0.1, psi = psivals[i], n_sim = 500, followup = 365,
+                                             theta = log(2), glmmod = glmmod, baseline_data = datimp, pb = TRUE)
+  print(tem$h)
+  hmat[i,1] <- tem$h
+}
+#2.62
+#3.71
+#4.34
+#4.72
+```
+
+
+
+BK-CUSUM:
+```{r}
+for(i in 1:4){
+  tem <- bk_control_limit(time = 6*365, alpha = 0.1, psi = psivals[i], n_sim = 500,
+                               theta = log(2), coxphmod = coxmod, baseline_data = datimp, pb = TRUE)
+  print(tem$h)
+  hmat[i,2] <- tem$h
+}
+#3.15
+#4.19
+#4.76
+#5.41
+```
+
+BK-CUSUM theta log(4):
+```{r}
+for(i in 1:4){
+  tem <- bk_control_limit(time = 6*365, alpha = 0.1, psi = psivals[i], n_sim = 500,
+                               theta = log(4), coxphmod = coxmod, baseline_data = datimp, pb = TRUE)
+  print(tem$h)
+  hmat[i,3] <- tem$h
+}
+#4.64
+#5.81
+#6.34
+#6.79
+```
+
+
+CGR-CUSUM:
+```{r}
+for(i in 1:4){
+  tem <- cgr_control_limit(time = 6*365, alpha = 0.1, psi = psivals[i], n_sim = 500,
+                                 coxphmod = coxmod, baseline_data = datimp, pb = TRUE, ncores = 3)
+  print(tem$h)
+  hmat[i,4] <- tem$h
+}
+#7.31
+#7.73
+#8.27
+#8.54
+```
+
+
+
+
+CGR-CUSUM theta <=6:
+```{r}
+for(i in 1:4){
+  tem <- cgr_control_limit(time = 6*365, alpha = 0.1, psi = psivals[i], n_sim = 500,
+                                 coxphmod = coxmod, baseline_data = datimp, pb = TRUE, maxtheta = log(6), ncores = 4)
+  print(tem$h)
+  #hmat[i,5] <- tem$h
+}
+#4.68
+#5.79
+#6.51
+#6.69
+```
+
+
+#Create ooc hospitals
+
+For each value of psi, create a data set:
+```{r}
+oochosp02 <- generate_units(time = 6*365, psi = psivals[1], n_sim = 500, coxphmod = coxmod, baseline_data = datimp, mu = log(2))
+oochosp06 <- generate_units(time = 6*365, psi = psivals[2], n_sim = 500, coxphmod = coxmod, baseline_data = datimp, mu = log(2))
+oochosp1 <- generate_units(time = 6*365, psi = psivals[3], n_sim = 500, coxphmod = coxmod, baseline_data = datimp, mu = log(2))
+oochosp17 <- generate_units(time = 6*365, psi = psivals[4], n_sim = 500, coxphmod = coxmod, baseline_data = datimp, mu = log(2))
+```
+
+#Construct charts on ooc data
+
+```{r}
+ooc_charts02 <- vector(mode = "list", length = 500)
+ooc_charts06 <- vector(mode = "list", length = 500)
+ooc_charts1 <- vector(mode = "list", length = 500)
+ooc_charts17 <- vector(mode = "list", length = 500)
+```
+
+psi = 0.2
+```{r}
+a <- txtProgressBar(min = 1, max = 500, style = 3)
+suppressMessages(
+for(i in 1:500){
+  setTxtProgressBar(a, value = i)
+  ooc_charts02[[i]]$ber <- bernoulli_cusum(data = subset(oochosp02, unit == i), followup = 365, glmmod = glmmod, theta = log(2), h = hmat[1,1])
+  ooc_charts02[[i]]$bk <- bk_cusum(data = subset(oochosp02, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[1,2], stoptime = 6*365)
+  ooc_charts02[[i]]$bk4 <- bk_cusum(data = subset(oochosp02, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[1,3], stoptime = 6*365)
+  ooc_charts02[[i]]$cgr <- cgr_cusum(data = subset(oochosp02, unit == i), coxphmod = coxmod,  h = hmat[1,4], stoptime = 6*365)
+  ooc_charts02[[i]]$cgr6 <- cgr_cusum(data = subset(oochosp02, unit == i), coxphmod = coxmod,  h = hmat[1,5], stoptime = 6*365)
+})
+close(a)
+```
+
+
+psi = 0.6
+```{r}
+a <- txtProgressBar(min = 1, max = 500, style = 3)
+suppressMessages(
+for(i in 1:500){
+  setTxtProgressBar(a, value = i)
+  ooc_charts06[[i]]$ber <- bernoulli_cusum(data = subset(oochosp06, unit == i), followup = 365, glmmod = glmmod, theta = log(2), h = hmat[2,1])
+  ooc_charts06[[i]]$bk <- bk_cusum(data = subset(oochosp06, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[2,2], stoptime = 6*365)
+  ooc_charts06[[i]]$bk4 <- bk_cusum(data = subset(oochosp06, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[2,3], stoptime = 6*365)
+  ooc_charts06[[i]]$cgr <- cgr_cusum(data = subset(oochosp06, unit == i), coxphmod = coxmod,  h = hmat[2,4], stoptime = 6*365)
+  ooc_charts06[[i]]$cgr6 <- cgr_cusum(data = subset(oochosp06, unit == i), coxphmod = coxmod,  h = hmat[2,5], stoptime = 6*365)
+})
+close(a)
+```
+
+psi = 1
+```{r}
+a <- txtProgressBar(min = 1, max = 500, style = 3)
+suppressMessages(
+for(i in 1:500){
+  setTxtProgressBar(a, value = i)
+  ooc_charts1[[i]]$ber <- bernoulli_cusum(data = subset(oochosp1, unit == i), followup = 365, glmmod = glmmod, theta = log(2), h = hmat[3,1])
+  ooc_charts1[[i]]$bk <- bk_cusum(data = subset(oochosp1, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[3,2], stoptime = 6*365)
+  ooc_charts1[[i]]$bk4 <- bk_cusum(data = subset(oochosp1, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[3,3], stoptime = 6*365)
+  ooc_charts1[[i]]$cgr <- cgr_cusum(data = subset(oochosp1, unit == i), coxphmod = coxmod,  h = hmat[3,4], stoptime = 6*365)
+  ooc_charts1[[i]]$cgr6 <- cgr_cusum(data = subset(oochosp1, unit == i), coxphmod = coxmod,  h = hmat[3,5], stoptime = 6*365)
+})
+close(a)
+```
+
+
+
+psi = 1.7
+```{r}
+a <- txtProgressBar(min = 1, max = 500, style = 3)
+suppressMessages(
+for(i in 1:500){
+  setTxtProgressBar(a, value = i)
+  ooc_charts17[[i]]$ber <- bernoulli_cusum(data = subset(oochosp17, unit == i), followup = 365, glmmod = glmmod, theta = log(2), h = hmat[4,1])
+  ooc_charts17[[i]]$bk <- bk_cusum(data = subset(oochosp17, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[4,2], stoptime = 6*365)
+  ooc_charts17[[i]]$bk4 <- bk_cusum(data = subset(oochosp17, unit == i), coxphmod = coxmod, theta = log(2), h = hmat[4,3], stoptime = 6*365)
+  ooc_charts17[[i]]$cgr <- cgr_cusum(data = subset(oochosp17, unit == i), coxphmod = coxmod,  h = hmat[4,4], stoptime = 6*365)
+  ooc_charts17[[i]]$cgr6 <- cgr_cusum(data = subset(oochosp17, unit == i), coxphmod = coxmod,  h = hmat[4,5], stoptime = 6*365)
+})
+close(a)
+```
+
+
+
+
+#Determine power of charts.
+
+Want: df with time, power, chart, psi
+
+
+psi = 0.2
+```{r}
+timespow <- seq(0, 6*365, by = 10)
+power_sim <- data.frame(time = numeric(), power = numeric(), chart = character(), psi = numeric())
+pow_ber <- sapply(ooc_charts02, FUN = function(x){ runlength(x$ber, h = hmat[1,1])})
+pow_bk <- sapply(ooc_charts02, FUN = function(x){ runlength(x$bk, h = hmat[1,2])})
+pow_bk4 <- sapply(ooc_charts02, FUN = function(x){ runlength(x$bk4, h = hmat[1,3])})
+pow_cgr <- sapply(ooc_charts02, FUN = function(x){ runlength(x$cgr, h = hmat[1,4])})
+pow_cgr6 <- sapply(ooc_charts02, FUN = function(x){ runlength(x$cgr6, h = hmat[1,5])})
+for(j in seq_along(timespow)){
+  tber <- c(timespow[j], sum(pow_ber <= timespow[j])/500, "Ber CUSUM", psi = 0.2)
+  tbk <- c(timespow[j], sum(pow_bk <= timespow[j])/500, "BK CUSUM", psi = 0.2)
+  tbk4 <- c(timespow[j], sum(pow_bk4 <= timespow[j])/500, "BK CUSUM4", psi = 0.2)
+  tcgr <- c(timespow[j], sum(pow_cgr <= timespow[j])/500, "CGR CUSUM", psi = 0.2)
+  tcgr6 <- c(timespow[j], sum(pow_cgr6 <= timespow[j])/500, "CGR CUSUM6", psi = 0.2)
+  power_sim <- rbind(power_sim, rbind(tber, tbk, tbk4, tcgr, tcgr6))
+}
+
+
+```
+
+
+psi = 0.6
+```{r}
+pow_ber <- sapply(ooc_charts06, FUN = function(x){ runlength(x$ber, h = hmat[2,1])})
+pow_bk <- sapply(ooc_charts06, FUN = function(x){ runlength(x$bk, h = hmat[2,2])})
+pow_bk4 <- sapply(ooc_charts06, FUN = function(x){ runlength(x$bk4, h = hmat[2,3])})
+pow_cgr <- sapply(ooc_charts06, FUN = function(x){ runlength(x$cgr, h = hmat[2,4])})
+pow_cgr6 <- sapply(ooc_charts06, FUN = function(x){ runlength(x$cgr6, h = hmat[2,5])})
+for(j in seq_along(timespow)){
+  tber <- c(timespow[j], sum(pow_ber <= timespow[j])/500, "Ber CUSUM", psi = 0.6)
+  tbk <- c(timespow[j], sum(pow_bk <= timespow[j])/500, "BK CUSUM", psi = 0.6)
+  tbk4 <- c(timespow[j], sum(pow_bk4 <= timespow[j])/500, "BK CUSUM4", psi = 0.6)
+  tcgr <- c(timespow[j], sum(pow_cgr <= timespow[j])/500, "CGR CUSUM", psi = 0.6)
+  tcgr6 <- c(timespow[j], sum(pow_cgr6 <= timespow[j])/500, "CGR CUSUM6", psi = 0.6)
+  power_sim <- rbind(power_sim, rbind(tber, tbk, tbk4, tcgr, tcgr6))
+}
+```
+
+
+psi = 1
+```{r}
+pow_ber <- sapply(ooc_charts1, FUN = function(x){ runlength(x$ber, h = hmat[3,1])})
+pow_bk <- sapply(ooc_charts1, FUN = function(x){ runlength(x$bk, h = hmat[3,2])})
+pow_bk4 <- sapply(ooc_charts1, FUN = function(x){ runlength(x$bk4, h = hmat[3,3])})
+pow_cgr <- sapply(ooc_charts1, FUN = function(x){ runlength(x$cgr, h = hmat[3,4])})
+pow_cgr6 <- sapply(ooc_charts1, FUN = function(x){ runlength(x$cgr6, h = hmat[3,5])})
+for(j in seq_along(timespow)){
+  tber <- c(timespow[j], sum(pow_ber <= timespow[j])/500, "Ber CUSUM", psi = 1)
+  tbk <- c(timespow[j], sum(pow_bk <= timespow[j])/500, "BK CUSUM", psi = 1)
+  tbk4 <- c(timespow[j], sum(pow_bk4 <= timespow[j])/500, "BK CUSUM4", psi = 1)
+  tcgr <- c(timespow[j], sum(pow_cgr <= timespow[j])/500, "CGR CUSUM", psi = 1)
+  tcgr6 <- c(timespow[j], sum(pow_cgr6 <= timespow[j])/500, "CGR CUSUM6", psi = 1)
+  power_sim <- rbind(power_sim, rbind(tber, tbk, tbk4, tcgr, tcgr6))
+}
+```
+
+
+psi = 1.7
+```{r}
+pow_ber <- sapply(ooc_charts17, FUN = function(x){ runlength(x$ber, h = hmat[4,1])})
+pow_bk <- sapply(ooc_charts17, FUN = function(x){ runlength(x$bk, h = hmat[4,2])})
+pow_bk4 <- sapply(ooc_charts17, FUN = function(x){ runlength(x$bk4, h = hmat[4,3])})
+pow_cgr <- sapply(ooc_charts17, FUN = function(x){ runlength(x$cgr, h = hmat[4,4])})
+pow_cgr6 <- sapply(ooc_charts17, FUN = function(x){ runlength(x$cgr6, h = hmat[4,5])})
+for(j in seq_along(timespow)){
+  tber <- c(timespow[j], sum(pow_ber <= timespow[j])/500, "Ber CUSUM", psi = 1.7)
+  tbk <- c(timespow[j], sum(pow_bk <= timespow[j])/500, "BK CUSUM", psi = 1.7)
+  tbk4 <- c(timespow[j], sum(pow_bk4 <= timespow[j])/500, "BK CUSUM4", psi = 1.7)
+  tcgr <- c(timespow[j], sum(pow_cgr <= timespow[j])/500, "CGR CUSUM", psi = 1.7)
+  tcgr6 <- c(timespow[j], sum(pow_cgr6 <= timespow[j])/500, "CGR CUSUM6", psi = 1.7)
+  power_sim <- rbind(power_sim, rbind(tber, tbk, tbk4, tcgr, tcgr6))
+}
+```
+
+```{r}
+colnames(power_sim) <- c("time", "power", "chart", "psi")
+rownames(power_sim) <- NULL
+power_sim$psi <- as.factor(power_sim$psi)
+power_sim$chart <- as.factor(power_sim$chart)
+power_sim$time <- as.numeric(power_sim$time)
+power_sim$time <- power_sim$time/365
+power_sim$power <- as.numeric(power_sim$power)
+```
+
+
+```{r}
+save(power_sim, ooc_charts02, ooc_charts06, ooc_charts1, ooc_charts17, oochosp02, oochosp06, oochosp1, oochosp17, file = "LROI_Power_data.Rdata")
+load("LROI_Power_data.Rdata")
+```
+
+
+#Plotting
+
+
+```{r}
+library(RColorBrewer)
+library(latex2exp)
+myColors <- brewer.pal(n = 4, name = "Dark2")
+names(myColors) <- levels(power_sim$psi)
+colScale <- scale_colour_manual(name = unname(TeX("$\\psi$ (arrival rate) ")),values = myColors, labels = c("0.2", "0.6", "1", "1.7"))
+ltyScale <- scale_linetype_manual(name = "Charts", values = c("solid", "dotted", "dotdash"), labels = c("BK", "CGR", "Bernoulli"))
+
+ltyScale2 <- scale_linetype_manual(name = "Charts", values = c("solid", "dotted", "dotdash", "longdash"), labels = c("BK", "CGR", "Bernoulli", "CGR6"))
+
+
+#Only BK, CGR & Bernoulli
+p1 <- ggplot(subset(power_sim, chart == "Ber CUSUM")) + geom_line(aes(x = time, y = power, group = psi, colour = psi, linetype = "solid"), lwd = 1.7) + geom_line(data = subset(power_sim, chart == "CGR CUSUM"), aes(x = time, y = power, group = psi, colour = psi, linetype = "dotted"), lwd = 1.7) + geom_line(data = subset(power_sim, chart == "BK CUSUM"), aes(x = time, y = power, group = psi, colour = psi, linetype = "dotdash"), lwd = 1.7)  +colScale + ltyScale+ labs(title = "Power of CUSUM charts over 6 years",subtitle = unname(TeX("N = 500 out of control ($e^{\\theta}$ = 2) hospitals")), x = "Time (Years)", y = "Power") + theme_bw()+  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+ scale_x_continuous(n.breaks = 7, limits = c(0, 6))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(1, "cm")) + guides(linetype = guide_legend(override.aes = list(size = 1.2)))
+
+p2 <- ggplot(subset(power_sim, chart == "Ber CUSUM")) + geom_line(aes(x = time, y = power, group = psi, colour = psi, linetype = "solid"), lwd = 1.7) + geom_line(data = subset(power_sim, chart == "CGR CUSUM"), aes(x = time, y = power, group = psi, colour = psi, linetype = "dotted"), lwd = 1.7) + geom_line(data = subset(power_sim, chart == "BK CUSUM"), aes(x = time, y = power, group = psi, colour = psi, linetype = "dotdash"), lwd = 1.7) + geom_line(data = subset(power_sim, chart == "CGR CUSUM6"), aes(x = time, y = power, group = psi, colour = psi, linetype = "twodash"), lwd = 1.7)  +colScale + ltyScale2 + labs(title = "Power of CUSUM charts over 6 years",subtitle = unname(TeX("N = 500 out of control ($e^{\\theta}$ = 2) hospitals")), x = "Time (Years)", y = "Power") + theme_bw()+  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+ scale_x_continuous(n.breaks = 7, limits = c(0, 6))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(1, "cm")) + guides(linetype = guide_legend(override.aes = list(size = 1.2)))
+```
+
+
+Faceted plots
+
+```{r}
+# New facet label names for dose variable
+library(latex2exp)
+psi.labs <- c("psi = 0.2", "psi = 0.6", "psi = 1", "psi = 1.7")
+names(psi.labs) <- c("0.2", "0.6", "1", "1.7")
+
+myColorsmain <- brewer.pal(n = 5, name = "Dark2")
+names(myColorsmain) <- levels(power_sim$chart)
+colScalemain <- scale_colour_manual(name = "CUSUM charts",values = myColorsmain, labels = c("Bernoulli", "BK", unname(TeX("BK ($\\e^{\\theta}$=4)")), "CGR", unname(TeX("CGR ($\\e^{\\theta} \\leq$6)"))))
+myLinetypemain <- c(4, 1, 2, 3, 5)
+names(myLinetypemain) <- levels(power_sim$chart)
+ltyScalemain <- scale_linetype_manual( name  ="CUSUM charts", values = myLinetypemain , labels = c("Bernoulli", "BK", unname(TeX("BK ($\\e^{\\theta}$=4)")), "CGR", unname(TeX("CGR ($\\e^{\\theta} \\leq$6)"))))
+
+myColors2 <- brewer.pal(n = 3, name = "Dark2")[c(1,3,2)]
+names(myColors2) <- levels(power_sim$chart)[c(1,2,4)]
+myltys2 <- c(3,1,4)
+names(myltys2) <- levels(power_sim$chart)[c(1,2,4)]
+colScale2 <- scale_colour_manual(name = "CUSUM charts",values = myColors2, labels = c("Bernoulli", "BK", "CGR"))
+ltyScale2 <- scale_linetype_manual( name  ="CUSUM charts", values = myltys2 , labels=c("Bernoulli", "BK", "CGR"))
+
+p4 <- ggplot(subset(power_sim, chart == "Ber CUSUM" | chart == "BK CUSUM" | chart == "CGR CUSUM")) + geom_line(aes(x = time, y = power, group = chart, colour = chart, linetype = chart), lwd = 1.7)    + facet_wrap(. ~ psi, nrow = 2, labeller = labeller(psi = psi.labs))+ labs(title = "Power of CUSUM charts over 6 years",subtitle = unname(TeX("N = 500 out of control ($e^{\\theta}$ = 2) hospitals")), x = "Time (Years)", y = "Power") + theme_bw()+  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+ scale_x_continuous(n.breaks = 7, limits = c(0, 6))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(1, "cm"))  + guides(linetype = guide_legend(override.aes = list(size = 1.2))) + colScale2 + ltyScale2
+  
+
+myColors3 <- brewer.pal(n = 3, name = "Dark2")[c(3,1,2)]
+names(myColors3) <- levels(power_sim$chart)[c(2,3,5)]
+myltys3 <- c(1,2,4)
+names(myltys3) <- levels(power_sim$chart)[c(2,3,5)]
+mylabs <- c("BK", unname(TeX("BK ($\\e^{\\theta}$=4)")), unname(TeX("CGR ($\\e^{\\theta} \\leq$6)")))
+names(mylabs) <- levels(power_sim$chart)[c(2,3,5)]
+colScale3 <- scale_colour_manual(name = "CUSUM charts",values = myColors3, labels = unname(TeX(c("BK", "BK ($\\e^{\\theta}$=4)", "CGR ($\\e^{\\theta} \\leq$6)"))))
+ltyScale3 <- scale_linetype_manual(name  = "CUSUM charts", values=myltys3, labels = unname(TeX(c("BK", "BK ($\\e^{\\theta}$=4)", "CGR ($\\e^{\\theta} \\leq$6)"))))
+#unname(TeX("BK ($\\e^{\\theta}$=2)"))
+
+tempdat <- subset(power_sim, chart == "BK CUSUM" | chart == "BK CUSUM4" | chart == "CGR CUSUM6")
+tempdat$chart <- droplevels(tempdat$chart)
+p5 <- ggplot(tempdat) + geom_line(aes(x = time, y = power, group = chart, colour = chart, linetype = chart), lwd = 1.7) + facet_wrap(. ~ psi, nrow = 2, labeller = labeller(psi = psi.labs))+ labs(title = "Power of CUSUM charts over 6 years",subtitle = unname(TeX("N = 500 out of control ($e^{\\theta}$ = 2) hospitals")), x = "Time (Years)", y = "Power") + theme_bw()+  theme(axis.title.x = element_text(size = 12)) +  theme(axis.title.y = element_text(size = 12)) + theme(plot.title = element_text(size = 15, hjust = 0.5), plot.subtitle = element_text(size = 13,hjust = 0.5, color = "grey50"))+ scale_x_continuous(n.breaks = 7, limits = c(0, 6))+ theme(legend.text = element_text(size = 11),legend.key.size = unit(1, "cm")) + guides(linetype = guide_legend(override.aes = list(size = 1.2))) + colScale3 + ltyScale3
+```
+
+
+
+

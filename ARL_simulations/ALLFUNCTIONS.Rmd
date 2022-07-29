@@ -38,15 +38,6 @@ invchazweibull <- function(t, lambda, nu){
   return((t/lambda)^(1/nu))
 }
 
-
-Hweib <- function(t, shape, scale){
- return((t/scale)^shape) 
-}
-  
-IHweibull <- function(t, shape, scale){
-  return(scale * t^(1/shape))
-}
-
 SSdif <- function(pred, act){
   return(mean((pred-act)^2))
 }
@@ -78,50 +69,31 @@ poissarriv <- function(psi, t){
   }
   return(parriv)
 }
+riskcalc <- function(dat, coefficients){
+  #Calculate risk for dataset dat according to Cox PH model using coefficients.
+  #Covariates should be included in dat as any variables which are not Si, Xi or Ti.
+  return(c(exp(as.matrix(dat[, !names(dat) %in% c("Si", "Xi", "Ti")]) %*% coefficients)))
+}
 
 ```
 
-
-
 ```{r}
-#Riskcalc is more general, as you can supply a coxmod such as a coxph object.
-#Returns NA when coefficient does not contain all covariates found in formula
-riskcalc <- function(dat, coxmod = NULL){
-  #Calculate risk for dataset dat according to Cox PH model using specified model
-  #coxmod must either be a COXPH model or a list containing $formula and named vector $coefficients
-  if(nrow(dat) == 0){
-    return(1)
-  } else if(is.null(coxmod)){
-    return(rep(1, nrow(dat)))
-  } else{
-      mmatrix <- model.matrix(coxmod$formula, dat)[,-1] #removes the intercept
-      coeffs <- coxmod$coefficients[colnames(mmatrix)]
-      if(nrow(dat) == 1){
-        coeffs <- coxmod$coefficients[names(mmatrix)]
-      }
-      return(c(exp(mmatrix %*% coeffs)))
-  }
-}
-
-
-
-#Same as v1 but uses riskcalcv2
-gensurvtime <- function(invchaz, dat, coxmod = NULL, mu = log(1) ){
+gensurvtime <- function(invchaz, dat, coefficients, mu = log(1) ){
   #This function generates Survival times for the dataset dat using the given coefficients and 
   #with rate exp(mu) times the null-rate invchaz
   #
   #invchaz should be a vectorized function returning the null-chazard at time t (one input only)
   #dat should only contain the variables Si, Xi, Ti and the Covariates (see next row)
   #Covariates in dat should be an n x p data frame or matrix containing the n individuals with their p covariates
-  #coxmod should be a model with $formula and $coefficients, or leave NULL to not risk-adjust the data
+  #Coefficients should be a p-vector containing the coefficients
   #mu should be a real number greater or equal than zero, with exp(mu) indicating the factor by which the
   #hazard differs from the null-rate
   U <- runif(nrow(dat))
-  Times <- invchaz(-log(U) * exp(-mu)* (1/riskcalc(dat, coxmod)))
+  Times <- invchaz(-log(U) * exp(-mu)* exp(- as.matrix(dat[, !colnames(dat) %in% c("Si", "Xi", "Ti")]) %*% coefficients))
   return(Times)
 }
-#use coxmod <- list(formula = as.formula(Xi ~ age + BP + gender + BMI + unif), coefficients = c(0.001, 0.005, 0.01, 0.002, 0.02))
-gendatapoisswcov <- function(psi, t, coxmod, invchaz, mugen = log(1)){
+
+gendatapoisswcov <- function(psi, t, coeffgen, invchaz, mugen = log(1)){
   #Create a dataset with covariates age, BP, gender and unif with poisson(psi) arrivals until time t. 
   #Coeffgen are the coefficients to be used for risk-adjustment and mu the exp(mu) adjusted rate factor
   #
@@ -132,11 +104,78 @@ gendatapoisswcov <- function(psi, t, coxmod, invchaz, mugen = log(1)){
   arrivals <- round(poissarriv(psi = psi, t = t))
   n <- length(arrivals)
   datn <- data.frame(age = rnorm(n, 45, 17), BP = rnorm(n, 105, 12), gender = rbinom(n, 1, 0.5) ,BMI = rnorm(n, 21, 9), unif = runif(n, 0, 100), Si = arrivals)
-  datn$Xi <- as.vector(ceiling(gensurvtimev(invchaz = invchaz, dat = datn, coxmod =  coxmod, mu = mugen)))
+  datn$Xi <- as.vector(ceiling(gensurvtime(invchaz = invchaz, dat = datn, coefficients =  coeffgen, mu = mugen)))
   datn$Ti <- datn$Si + datn$Xi
   return(datn)
 }
-gendatapoiss <- function(psi , t, coxmod = NULL, invchaz, mugen = log(1)){
+gendatapoiss <- function(psi , t, coeffgen, invchaz, mugen = log(1)){
+  #Create a dataset without covariates with poisson(psi) arrivals until time t. 
+  #Coeffgen are the coefficients to be used for risk-adjustment and mu the exp(mu) adjusted rate factor
+  #
+  #coefficients should be a p-vector with the coefficients corresponding to the null-hypothesis.
+  #Theta should be a real number greater or equal than zero, with exp(theta) indicating the factor by which the
+  #hazard differs from the null-rate
+  #t indicates up until which time primary procedures can take place
+  arrivals <- round(poissarriv(psi = psi, t = t))
+  n <- length(arrivals)
+  datn <- data.frame(asd = rep(0, n), Si =  arrivals )
+  datn$Xi <- as.vector(ceiling(gensurvtime(invchaz = invchaz, dat = datn, coefficients =  coeffgen, mu = mugen)))
+  datn$Ti <- datn$Si + datn$Xi
+  return(datn)
+}
+```
+
+
+
+```{r}
+#Riskcalcv2 is more general, as you can supply a coxmod such as a coxph object.
+#Returns NA when coefficient does not contain all covariates found in formula
+riskcalcv2 <- function(dat, coxmod = NULL){
+  #Calculate risk for dataset dat according to Cox PH model using specified model
+  #coxmod must either be a COXPH model or a list containing $formula and named vector $coefficients
+  if(is.null(coxmod)){
+    return(rep(1, nrow(dat)))
+  } else{
+      mmatrix <- model.matrix(coxmod$formula, dat)[,-1] #removes the intercept
+      coeffs <- coxmod$coefficients[colnames(mmatrix)]
+      return(c(exp(mmatrix %*% coeffs)))
+  }
+}
+
+
+
+#Same as v1 but uses riskcalcv2
+gensurvtimev2 <- function(invchaz, dat, coxmod = NULL, mu = log(1) ){
+  #This function generates Survival times for the dataset dat using the given coefficients and 
+  #with rate exp(mu) times the null-rate invchaz
+  #
+  #invchaz should be a vectorized function returning the null-chazard at time t (one input only)
+  #dat should only contain the variables Si, Xi, Ti and the Covariates (see next row)
+  #Covariates in dat should be an n x p data frame or matrix containing the n individuals with their p covariates
+  #coxmod should be a model with $formula and $coefficients, or leave NULL to not risk-adjust the data
+  #mu should be a real number greater or equal than zero, with exp(mu) indicating the factor by which the
+  #hazard differs from the null-rate
+  U <- runif(nrow(dat))
+  Times <- invchaz(-log(U) * exp(-mu)* (1/riskcalcv2(dat, coxmod)))
+  return(Times)
+}
+#use coxmod <- list(formula = as.formula(Xi ~ age + BP + gender + BMI + unif), coefficients = c(0.001, 0.005, 0.01, 0.002, 0.02))
+gendatapoisswcovv2 <- function(psi, t, coxmod, invchaz, mugen = log(1)){
+  #Create a dataset with covariates age, BP, gender and unif with poisson(psi) arrivals until time t. 
+  #Coeffgen are the coefficients to be used for risk-adjustment and mu the exp(mu) adjusted rate factor
+  #
+  #coefficients should be a p-vector with the coefficients corresponding to the null-hypothesis.
+  #Theta should be a real number greater or equal than zero, with exp(theta) indicating the factor by which the
+  #hazard differs from the null-rate
+  #t indicates up until which time primary procedures can take place
+  arrivals <- round(poissarriv(psi = psi, t = t))
+  n <- length(arrivals)
+  datn <- data.frame(age = rnorm(n, 45, 17), BP = rnorm(n, 105, 12), gender = rbinom(n, 1, 0.5) ,BMI = rnorm(n, 21, 9), unif = runif(n, 0, 100), Si = arrivals)
+  datn$Xi <- as.vector(ceiling(gensurvtimev2(invchaz = invchaz, dat = datn, coxmod =  coxmod, mu = mugen)))
+  datn$Ti <- datn$Si + datn$Xi
+  return(datn)
+}
+gendatapoissv2 <- function(psi , t, coxmod = NULL, invchaz, mugen = log(1)){
   #Create a dataset without covariates with poisson(psi) arrivals until time t. 
   #coxmod must either be a COXPH model or a list containing $formula and named vector $coefficients
   #
@@ -147,7 +186,7 @@ gendatapoiss <- function(psi , t, coxmod = NULL, invchaz, mugen = log(1)){
   arrivals <- round(poissarriv(psi = psi, t = t))
   n <- length(arrivals)
   datn <- data.frame(Si =  arrivals )
-  datn$Xi <- as.vector(ceiling(gensurvtime(invchaz = invchaz, dat = datn, coxmod = coxmod, mu = mugen)))
+  datn$Xi <- as.vector(ceiling(gensurvtimev2(invchaz = invchaz, dat = datn, coxmod = coxmod, mu = mugen)))
   datn$Ti <- datn$Si + datn$Xi
   return(datn)
 }
@@ -161,22 +200,18 @@ gendatapoiss <- function(psi , t, coxmod = NULL, invchaz, mugen = log(1)){
 The function in this subsection constructs the CTGLR chart for data dat, using risk-adjustment coefficients and with the specified null cumulative hazard rate cbaseh. n indicates the timespoints 1 until n to consider the chart on and h is the control limit.
 
 ```{r}
-CTGLR <- function(dat, coxmod = NULL, cbaseh, n = NULL, h = NULL){
-  #This function fits the CTGLR chart on the given data, using the given coxmod (can be NULL) for risk adjustment
+CTGLRsim <- function(dat, coefficients, cbaseh, n = 1461, h = NULL){
+  #This function fits the CTGLR chart on the given data, using the given coefficients for risk adjustment
   #dat must be the dataframe containing the covariates, n x p data frame or matrix
-  #dat must contain Si - time of entry into study, Xi - time of event, Status = 1(death/revision), 0 (censored)
   #cbaseh must be a function which returns the cumulative baseline hazard under null at every timepoint (or at least on discrete times)
   #h is the control limit, when not providing a control limit, the chart will be plotted until the last timepoint
   #n is the time up until which we evaluate the GLR
   library(survival)
-  dat$Ti <- dat$Si + dat$Xi
-  if(is.null(n)){
-    n <- max(dat$Ti[is.finite(dat$Ti)])
-  }
+  #Gt defined as in section CTGLR. Gt is the GLR we will plot (time, upper, lower)
   Gt <- matrix(0, ncol = 2, nrow = 1)
   colnames(Gt) <- c("time", "value")
   #Now we construct the predicted values for the risk exp(lp) with lp = linear predictor for all entries under H_0. Maybe only do this for the people which die or revision.
-  riskdat <- riskcalc(dat, coxmod)
+  riskdat <- riskcalc(dat, coefficients)
   #Do we want to use a control limit?
   indh <- is.null(h)
   #Indicator for whether the GLR was stopped by the control limit or not
@@ -191,25 +226,22 @@ CTGLR <- function(dat, coxmod = NULL, cbaseh, n = NULL, h = NULL){
   for (i in 2:(n+1)){
     #current time = i-1
     #First we determine the MLE of theta - for this we are only interested with cases which have already had an outcome
-    revs <- which(dat$Ti <= i-1 & dat$Status == 1)
-    numfail <- length(revs)
-    cens <- which(dat$Ti <= i-1 & dat$Status == 0)
-    contrF <- c(revs, cens)
+    revs <- which(dat$Ti <= i-1)
     #We calculate the sum of the cumulative baseline hazard for people which have had a revision at or before t
-    sumF <- ifelse(length(contrF) > 0, sum(riskdat[contrF] * cbaseh(dat$Xi[contrF])), 0) 
+    sumF <- ifelse(length(revs) > 0, sum(riskdat[revs] * cbaseh(dat$Xi[revs])), 0)
     #First we determine the active cases, we exclude the cases which have died (censoring)
-    active <- which(dat$Si <= i-2 & dat$Ti >= i-1)
+    active <- which(dat$Si <= i-2 & dat$Ti > i-1)
     contributionactive <- ifelse(length(active) > 0, sum(riskdat[active] * cbaseh((i-1) -dat$Si[active])), 0) 
-    theta <-log((numfail)/(sumF + contributionactive))
+    theta <-log((length(revs))/(sumF + contributionactive))
     if (is.finite(theta)){ 
       theta <- max(0,theta)
     } else {theta <- 0}
     #Now we can calculate the GLR at every timepoint, using above found value for theta
     thetaold <- c(thetaold, theta)
-    Gt <- rbind(Gt, c(i-1, numfail* theta - (exp(theta) - 1) * (sumF + contributionactive)))
+    Gt <- rbind(Gt, c(i-1, length(revs)* theta - (exp(theta) - 1) * (sumF + contributionactive)))
     sumFold <- c(sumFold, sumF)
     contractiveold <- c(contractiveold, contributionactive)
-    lenDold <- c(lenDold, numfail)
+    lenDold <- c(lenDold, length(revs))
     if (!indh){if(Gt[i, "value"] >= h) {stopind = TRUE; break}}
   }
   return(list(GLR = Gt, 
@@ -227,29 +259,26 @@ CTGLR <- function(dat, coxmod = NULL, cbaseh, n = NULL, h = NULL){
 Construct the CTCUSUM chart on dataset dat using risk-adjustment coefficients with specified null cumulative baseline hazard rate cbaseh, using a value of exp(theta) for the alternative hypothesis factor. h is the control limit.
 
 ```{r}
-CTCUSUM <- function(dat, coxmod, cbaseh, theta, n = NULL, h = NULL){
+CTCUSUMsim <- function(dat, coefficients, cbaseh, theta, n = 1461, h = NULL){
   #theta is as defined in the CUSUM chart, the value of exp(theta) is the factor in the alternative hypothesis
   #dat must be the dataframe containing the values on which to construct the cusum, containing $Si and $Ti
   #phmodel must be a model fitted with coxph
   #coefficients are the risk-adjustment coefficients for the chart
-  #cbaseh must be a function which returns the null cumulative baseline hazard at every timepoint (or at least on discrete times), if the only times of interest are the fitted ones, use basehaz(phmodel) - vectorize it!! Note that if cbaseh does not cover all the timepoints on which the chart should be plotted, then only up until biggest value of basehaz will the chart be plotted.
+  #cbaseh must be a function which returns the null cumulative baseline hazard at every timepoint (or at least on discrete times), if the only times of interest are the fitted ones, use basehaz(phmodel) - vectorize it!!
   #h is the control limit, leave NULL if no control limit is wanted
   #n is the time up until which we evaluate the cusum (in days)
   #In our case the smallest time difference is one day.
+
   library(survival)
-  dat$Ti <- dat$Si + dat$Xi
-  if(is.null(n)){
-    n <- max(dat$Ti[is.finite(dat$Ti)])
-  }
   #Gt and dUt defined as in Kalbfleisch&Biswas. Gt is the CUSUM we will plot (time, upper, lower)
   Gt <- matrix(0, ncol = 3, nrow = 1)
   colnames(Gt) <- c("time", "lower", "upper")
   #Amount of revisions at time t. Note that index 1 implies t = 0, so index n implies time n-1
   #Note that this is the trend upward of the cusum at time t, the cusum can only increase from a revision.
   revisions <- numeric(n+1)
-  revisions[as.integer(names(table(subset(dat, Status == 1)$Ti)))+1] <- as.integer(table(subset(dat, Status == 1)$Ti))
+  revisions[as.integer(names(table(dat$Ti, exclude = Inf)))+1] <- as.integer(table(dat$Ti, exclude = Inf))
   #Now we construct the predicted values for the risk exp(lp) with lp = linear predictor for all entries
-  riskdat <- riskcalc(dat, coxmod)
+  riskdat <- riskcalc(dat, coefficients)
   #Do we want to use a control limit?
   indh <- is.null(h)
   #Indicator for whether the CUSUM was stopped by the control limit or not
@@ -291,35 +320,28 @@ Construct the CTMAXGLR chart.
 
 ```{r}
 #Faster and less memory intensive
-CTMAXGLR <- function(dat, coxmod, cbaseh, n =NULL, h = NULL){
+CTMAXGLRsim <- function(dat, coefficients, cbaseh, n = 1461, h = NULL){
   library(survival)
   stopind = FALSE
   indh <- is.null(h)
-  if(is.null(n)){
-    n <- max(dat$Ti[is.finite(dat$Ti)]) 
-  }
-  dat$Ti <- dat$Si + dat$Xi
-  print(n)
   #dat must be the dataframe containing the covariates, n x p data frame or matrix
   #cbaseh must be a function which returns the cumulative baseline hazard under null at every timepoint (or at least on discrete times)
   #h is the control limit
   #Note that dat and phmodel must contain the same variables
   #n is the time up until which we evaluate the GLR
-  riskdat <- riskcalc(dat, coxmod)
+  riskdat <- riskcalc(dat, coefficients)
   NDtlist <- vector(mode = "list", length = n+1)
   Atlist <- vector(mode = "list", length = n+1)
-  pb <- txtProgressBar(min = 0, max = 2*(n+1), style = 3)
   for(j in 1:(n+1)){
-    setTxtProgressBar(pb, j)
     #j-1 indicates from which timepoint we consider cases (we consider Si >= j-1)
     #We create list with 1st entry amount of failures at t=0, 2nd at t=2 etc
     #j = t+1
-    tdat <- subset(dat, Status == 1 & Si >= j-1)
+    tdat <- subset(dat, Si >= j-1 & Ti <= n)
     tempding <- numeric(n+1-(j-1))
-    tempding[as.integer(names(table(tdat$Ti)))+1-(j-1)] <- as.integer(table(tdat$Ti))
+    tempding[as.integer(names(table(tdat$Ti, exclude = Inf)))+1-(j-1)] <- as.integer(table(tdat$Ti, exclude = Inf))
     NDtlist[[j]] <- tempding
     tdat2 <- subset(dat, Si >= j-1)
-    riskdat <- riskcalc(tdat2, coxmod)
+    riskdat <- riskcalc(tdat2, coefficients)
     tempding2 <- numeric(n+1-(j-1))
     for(i in j:(n+1)){
       #i = t+1
@@ -329,8 +351,6 @@ CTMAXGLR <- function(dat, coxmod, cbaseh, n =NULL, h = NULL){
     }
     Atlist[[j]] <- tempding2
   }
-  rm(tdat)
-  rm(tdat2)
   #Now that we have calculated all necessary values for the chart, we construct it:
   cumndtlist <- lapply(NDtlist, function(x) cumsum(x))
   cumatlist <- lapply(Atlist, function(x) cumsum(x))
@@ -338,10 +358,9 @@ CTMAXGLR <- function(dat, coxmod, cbaseh, n =NULL, h = NULL){
   maxindex <- numeric(n+1)
   thetaval <- numeric(n+1)
   for(i in 1:(n+1)){
-    setTxtProgressBar(pb, j + i)
-    for (k in 1:i){
-      Ndtt <- cumndtlist[[k]][i-k+1]
-      Att <- cumatlist[[k]][i-k+1]
+    for (j in 1:i){
+      Ndtt <- cumndtlist[[j]][i-j+1]
+      Att <- cumatlist[[j]][i-j+1]
       theta <- log(Ndtt/Att)
       if (is.finite(theta)){ 
         theta <- max(0,theta)
@@ -349,13 +368,12 @@ CTMAXGLR <- function(dat, coxmod, cbaseh, n =NULL, h = NULL){
       Gval <- theta * Ndtt - (exp(theta)-1)*Att
       if(Gval >= chartvals[i]){
         chartvals[i] <- Gval
-        maxindex[i] <- k-1
+        maxindex[i] <- j-1
         thetaval[i] <- theta
       }
     }
     if (!indh){if(chartvals[i] >= h) {stopind = TRUE; break}}
   }
-  close(pb)
   Gt <- matrix(c(0:n, chartvals), ncol = 2)
   colnames(Gt) <- c("time", "value")
   return(list(GLR = Gt,
@@ -1011,25 +1029,18 @@ plot.CTGLRLISTmean <- function(glrlist, meanplot = FALSE){
 Combine the GLR and CUSUM charts into one list and use this function to plot them together.
 
 ```{r}
-plot.ALL <- function(chartlist, nameslist, hlist = NULL){
-  library(RColorBrewer)
+plot.ALL <- function(chartlist, nameslist){
   #This function plots together all the elements in the list with different colours.
   n <- length(chartlist)
-  #library(RColorBrewer)
-  #brewer.pal(7, "BrBG")
-  #cols <- palette.colors(n = n, palette = "ggplot")
-  cols <- brewer.pal(n = n, name = "Dark2")
+  cols <- palette(rainbow(n +1))
   finaldat <- data.frame(t = integer(), value = double(), description = factor())
   for (k in 1:n){
-    if("p0" %in% names(chartlist[[k]])){
-      pltGLR <- cbind(as.data.frame(chartlist[[k]]$CUSUM[, c(1,2)]), as.factor(nameslist[k]))
-      names(pltGLR) <- c("t", "value", "description")
-      finaldat <- rbind(finaldat, pltGLR)
-    } else if ("GLR" %in% names(chartlist[[k]])){
+    if ("GLR" %in% names(chartlist[[k]])){
       pltGLR <- cbind(as.data.frame(chartlist[[k]]$GLR), as.factor(nameslist[k]))
       names(pltGLR) <- c("t", "value", "description")
       finaldat <- rbind(finaldat, pltGLR)
-    } else if("CUSUM" %in% names(chartlist[[k]])){
+    }
+    else if("CUSUM" %in% names(chartlist[[k]])){
       CUSUM <- chartlist[[k]]$CUSUM
       times <- nrow(CUSUM)
       pltcusum <- data.frame(t = integer(), value = double())
@@ -1043,15 +1054,8 @@ plot.ALL <- function(chartlist, nameslist, hlist = NULL){
       finaldat <- rbind(finaldat, pltcusum)
     }
   }
-  names(cols) = unique(finaldat$description)
-  colScale <- scale_colour_manual(name = "Chart", values = cols)
   names(finaldat) <- c("t", "value", "description")
-  g <- ggplot(data = finaldat, mapping= aes(x = t, y = value, colour = description)) + geom_line() + colScale
-  if(!is.null(hlist)){
-    for(j in 1:length(hlist)){
-      g <- g+ geom_hline(yintercept = hlist[j], colour = cols[j], linetype = "longdash")
-    }
-  }
+  g <- ggplot(data = finaldat, mapping= aes(x = t, y = value, colour = description)) + geom_line()
   return(g)
 }
 ```
@@ -1078,7 +1082,7 @@ RLfromh <- function(CTCHART, h, time = CTCHART$runtime){
   #When supplying time, we only consider the cusum up to that time (usefull for shorter runs)
   if ("GLR" %in% names(CTCHART)){
     tempGLR <- CTCHART$GLR[1:(time+1),2]
-    tempwhich <- which(tempGLR >= h)
+    tempwhich <- which(tempGLR > h)
     if (length(tempwhich) == 0){
       return(Inf)
     } else{
@@ -1086,25 +1090,13 @@ RLfromh <- function(CTCHART, h, time = CTCHART$runtime){
     }
   } else {
     tempcus <- CTCHART$CUSUM[1:(time+1), 3]
-    tempwhich <- which(tempcus >= h)
+    tempwhich <- which(tempcus > h)
     if (length(tempwhich) == 0){
       return(Inf)
     } else{
       return(min(tempwhich-1))
     }
   }
-}
-#Make one forthe discrete CUSUM as well
-RLfromhv2 <- function(CUSUMchart, h){
-  #This function returns the run length of the CUSUM using upper bound h
-  #When supplying time, we only consider the cusum up to that time (usefull for shorter runs)
-    tempCUS <- CUSUMchart$CUSUM[,2]
-    tempwhich <- which(tempCUS >= h)
-    if (length(tempwhich) == 0){
-      return(Inf)
-    } else{
-      return(min(CUSUMchart$CUSUM$time[tempwhich])-1)
-    }
 }
 ```
 
@@ -1150,23 +1142,21 @@ save(CTGLREXPTEST1000CHARTSEXPH14, file = "CTGLREXPTEST1000CHARTSEXPH14.Rdata")
 #can add overdispersion later
 FUNNELsim <- function(glmmodel = NULL, dat, followup, conflev = c(0.95, 0.99), p0 = NULL, time = NULL){
   #First perform a logistic regression to obtain coefficients for the Risk-adjustment, then specify them later
-  #dat has to be a dataframe containing at least Si (time of entry), Xi (time until failure), and additionally the    covariates to RA   on, it also has to contain $instance indicating the hospital in question
+  #dat has to be a dataframe containing at least Xi (time until failure), and additionally the covariates to RA on
   #glmmodel is the risk-adjustment model, either an object of class "glm" or $formula and $coefficients
-  #followup is time until which we consider outcomes, usually 365 (1 year) as we consider 1 year post transplant
+  #followup is time until which we consider outcomes
   #Specify institute name or number in dat$instance
   #conflev indicates the confidence levels at which to plot the boundaries
-  #time is the chronological time at which the FUNNEL chart should be constructed, we remove non-qualifying cases
+  #time is the time until which the CUSUM chart should be constructed
   if(!is.null(time)){
-    newdat <- subset(dat, Si + followup <= time)
-  } else{
-    newdat <- dat
+    dat <- subset(dat, Si + followup <= time)
   }
   if(is.null(p0)){
-    p0 <- length(which((newdat$Xi <= followup) & (newdat$Status == 1)))/length(newdat$Xi)
+    p0 <- length(which(dat$Xi < followup))/length(dat$Xi)
   }
   plotframe <- data.frame(instance = character(), observed = double(), expected = double(), numcases = double())
-  for(j in unique(newdat$instance)){
-    tempdat <- subset(newdat, instance == j)
+  for(j in unique(dat$instance)){
+    tempdat <- subset(dat, instance == j)
     tempnum <- length(tempdat$Xi)
     if(!is.null(glmmodel)){
       if(any(class(glmmodel) == "glm")){
@@ -1180,7 +1170,7 @@ FUNNELsim <- function(glmmodel = NULL, dat, followup, conflev = c(0.95, 0.99), p
     } else{
       tempexpec <- tempnum * p0 
     }
-    tempobs <- length(which((tempdat$Xi <= followup) & (tempdat$Status == 1)))
+    tempobs <- length(which(tempdat$Xi <= followup))
     temprow <- data.frame(as.character(j),tempobs, tempexpec,  tempnum)
     plotframe <- rbind(plotframe, temprow)
   }
@@ -1212,31 +1202,14 @@ FUNNELsim <- function(glmmodel = NULL, dat, followup, conflev = c(0.95, 0.99), p
   colnames(boundplotframe) = c("numtotal", "conflev", "lower", "upper")
   return(list(followup = followup,
               p0 = p0,
-              time = time,
               conflev = conflev,
               data = plotframe,
               plotdata = boundplotframe))
 }
-plot.FUNNEL <- function(funneldat, percentage = TRUE){
+plot.FUNNEL <- function(funneldat){
   #Supply plot.FUNNEL with output from FUNNELsim or a data frame with $instancedata and $p0 and $conflev
-  if(percentage == TRUE){
-    funneldat$plotdata[, c("lower", "upper")] <- funneldat$plotdata[, c("lower", "upper")] * 100
-    funneldat$data$p <- funneldat$data$p * 100
-    funneldat$p0 <- funneldat$p0*100
-  }
-  maxy <- max(funneldat$data$p) + 0.1*max(funneldat$data$p)
-  miny <- min(funneldat$data$p) - 0.1*max(funneldat$data$p)
-  t <- ggplot() + geom_line(data = funneldat$plotdata, mapping= aes(x = numtotal, y = lower, group = as.factor(conflev)), colour = "blue", linetype = "dashed")  + geom_line(data = funneldat$plotdata,aes(x = numtotal, y = upper, group = as.factor(conflev)),colour = "blue", linetype = "dashed") + geom_point(data = funneldat$data, mapping= aes(x = numtotal, y = p, colour = as.factor(instance))) + theme(legend.position = "none") + geom_hline(yintercept = funneldat$p0, colour = "grey") + ylim(miny, maxy)
+  t <- ggplot() + geom_line(data = funneldat$plotdata, mapping= aes(x = numtotal, y = lower, group = as.factor(conflev)), colour = "blue", linetype = "dashed")  + geom_line(data = funneldat$plotdata,aes(x = numtotal, y = upper, group = as.factor(conflev)),colour = "blue", linetype = "dashed") + geom_point(data = funneldat$data, mapping= aes(x = numtotal, y = p, colour = as.factor(instance)))
   return(t)
-}
-extract.FUNNEL <- function(funneldat){
-  k <- funneldat$conflev
-  outp <- list("time" = funneldat$time, "followup" = funneldat$followup)
-  for(i in k){
-    temp <- sort(funneldat$data[which(funneldat$data[, as.character(i)] == "worse"), "instance"])
-    outp[[as.character(i)]] = droplevels(as.factor(temp))
-  }
-  return(outp)
 }
 ```
 
@@ -1255,10 +1228,9 @@ CUSUMsim <- function(glmmodel = NULL, dat, followup, theta = NULL, p1 = NULL, p0
   if(!is.null(time)){
     dat <- subset(dat, Si + followup <= time)
   }
-  stopind = FALSE
   hnull <- is.null(h)
   dat <- dat[order(dat$Si),]
-  dat$outcome <- as.integer((dat$Xi <= followup) & (dat$Status == 1))
+  dat$outcome <- as.integer(dat$Xi <= followup)
   dat$timeobs <- dat$Si + followup
   Gt <- data.frame(time = double(), value = double(), numobs = double())
   Gtval <- 0
@@ -1292,24 +1264,16 @@ CUSUMsim <- function(glmmodel = NULL, dat, followup, theta = NULL, p1 = NULL, p0
       Wn <- sum(tempdat$outcome)*log(OR) +  tempsecondval
     }
     Gtval <- max(0, Gtval + Wn)
-    Gt <- rbind(Gt, c(i, Gtval, numobs))
-    if(!hnull){if(Gtval >= h){return(list(CUSUM = Gt,
-                                          runtime = i,
-                                          h = h,
-                                          p0 = p0,
-                                          theta = theta,
-                                          glmmodel = glmmodel$coefficients,
-                                          stopind = TRUE))}}
+    Gt[j,] <- c(i, Gtval, numobs)
+    if(!hnull){if(Gtval >= h){return(list(CUSUM = Gt))}}
     j <- j+1
   }
-  colnames(Gt) = c("time", "value", "numobs")
   return(list(CUSUM = Gt,
               runtime = i,
               h = h,
               p0 = p0,
               theta = theta,
-              glmmodel = glmmodel$coefficients,
-              stopind = stopind))
+              glmmodel = glmmodel))
 }
 plot.CUSUM <- function(CUSUM, h = CUSUM$h){
   g <- ggplot(as.data.frame(CUSUM$CUSUM), mapping = aes(x = time, y = value)) + geom_line() + geom_hline(yintercept = h, color = "red")
