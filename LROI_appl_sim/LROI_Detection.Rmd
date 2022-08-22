@@ -1,6 +1,6 @@
 ---
 title: "LROI Detection"
-author: "Daniel Gomon"
+author: "Daniel Gomon, Hein Putter, Rob Nelissen, Stéphanie van der Pas"
 date: "02/03/2022"
 output: pdf_document
 ---
@@ -19,7 +19,7 @@ rmarkdown::render("Data.Rmd")
 #Used success package version 0.1.0 for this script. Source files attached on github.
 
 ```{r}
-#install.packages("C:/Users/danie/OneDrive - Universiteit Leiden/CGRCUSUM/Biostat_RCode/success_0.1.0.tar.gz", repos = NULL, type="source") 
+#install.packages("success_0.1.0.tar.gz", repos = NULL, type="source") 
 library(success)
 ```
 

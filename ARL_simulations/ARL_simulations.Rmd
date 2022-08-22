@@ -1,6 +1,6 @@
 ---
-title: "CTCUSUM vs CTGLR"
-author: "Daniel Gomon"
+title: "BK-CUSUM vs CGR-CUSUM"
+author: "Daniel Gomon, Hein Putter, Rob Nelissen, Stéphanie van der Pas"
 date: "30/10/2020"
 output: pdf_document
 ---

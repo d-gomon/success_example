@@ -1,3 +1,4 @@
+install.packages("success_0.1.2.tar.gz", repos = NULL, type="source") 
 library(success)
 library(survival)
 set.seed(01041996)
@@ -43,12 +44,10 @@ alpha <- 0.05
 bk_control <- bk_control_limit(time = time, alpha = alpha, psi = psi, 
                                n_sim = n_sim_ic, theta = theta, coxphmod = coxmod, 
                                baseline_data = surgerydat, pb = TRUE)
-#7.63
 
 cgr_control <- cgr_control_limit(time = time, alpha = alpha, psi = psi, 
                                  n_sim = n_sim_ic, coxphmod = coxmod, 
                                  baseline_data = surgerydat, pb = TRUE)
-#8.75
 
 bernoulli_control <- bernoulli_control_limit(time = time, alpha = alpha, 
                                              psi = psi, n_sim = n_sim_ic, 
@@ -56,7 +55,6 @@ bernoulli_control <- bernoulli_control_limit(time = time, alpha = alpha,
                                              glmmod = glmmod, 
                                              baseline_data = surgerydat, 
                                              pb = TRUE)
-#4.1
 
 #Generate out-of-control units with mu = log(2) (twice the failure rate)
 #This means that BK- and Bernoulli CUSUM have perfect parameters!
@@ -185,9 +183,8 @@ id_cgr <- which.min(abs(ARL_cgr - ARL_0))
 
 #Determine control limits to use for BK and CGR-CUSUM
 h_bk <- hseq[id_bk]
-#3.22
 h_cgr <- hseq[id_cgr]
-#4.5
+
 
 
 #Generate out-of-control charts with exp(mu) = 2
@@ -214,8 +211,7 @@ ARL_log2 <- c(mean(sapply(oc_charts_log2, FUN = function(x) runlength(x$bk, h = 
 names(ARL_log2) <- c("bk", "cgr")
 
 ARL_log2
-# bk      cgr 
-# 49.28786 42.18189 
+
 
 #So CGR has smaller oc ARL with same ic ARL
 
