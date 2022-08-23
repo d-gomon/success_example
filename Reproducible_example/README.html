@@ -365,69 +365,8 @@ pre code {
 </div>
 
 
-<div id="success-example" class="section level1">
-<h1>Success example</h1>
-<!-- badges: start -->
-<p><a href="https://doi.org/10.48550/arXiv.2205.07618"><img src="data:image/svg+xml;charset=utf-8;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iMTYwIiBoZWlnaHQ9IjIwIiByb2xlPSJpbWciIGFyaWEtbGFiZWw9InN0YXQuQVA6IGFyWGl2OjIyMDUuMDc2MTgiPjx0aXRsZT5zdGF0LkFQOiBhclhpdjoyMjA1LjA3NjE4PC90aXRsZT48bGluZWFyR3JhZGllbnQgaWQ9InMiIHgyPSIwIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjYmJiIiBzdG9wLW9wYWNpdHk9Ii4xIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLW9wYWNpdHk9Ii4xIi8+PC9saW5lYXJHcmFkaWVudD48Y2xpcFBhdGggaWQ9InIiPjxyZWN0IHdpZHRoPSIxNjAiIGhlaWdodD0iMjAiIHJ4PSIzIiBmaWxsPSIjZmZmIi8+PC9jbGlwUGF0aD48ZyBjbGlwLXBhdGg9InVybCgjcikiPjxyZWN0IHdpZHRoPSI0OSIgaGVpZ2h0PSIyMCIgZmlsbD0iIzU1NSIvPjxyZWN0IHg9IjQ5IiB3aWR0aD0iMTExIiBoZWlnaHQ9IjIwIiBmaWxsPSIjYjMxYjFiIi8+PHJlY3Qgd2lkdGg9IjE2MCIgaGVpZ2h0PSIyMCIgZmlsbD0idXJsKCNzKSIvPjwvZz48ZyBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iVmVyZGFuYSxHZW5ldmEsRGVqYVZ1IFNhbnMsc2Fucy1zZXJpZiIgdGV4dC1yZW5kZXJpbmc9Imdlb21ldHJpY1ByZWNpc2lvbiIgZm9udC1zaXplPSIxMTAiPjx0ZXh0IGFyaWEtaGlkZGVuPSJ0cnVlIiB4PSIyNTUiIHk9IjE1MCIgZmlsbD0iIzAxMDEwMSIgZmlsbC1vcGFjaXR5PSIuMyIgdHJhbnNmb3JtPSJzY2FsZSguMSkiIHRleHRMZW5ndGg9IjM5MCI+c3RhdC5BUDwvdGV4dD48dGV4dCB4PSIyNTUiIHk9IjE0MCIgdHJhbnNmb3JtPSJzY2FsZSguMSkiIGZpbGw9IiNmZmYiIHRleHRMZW5ndGg9IjM5MCI+c3RhdC5BUDwvdGV4dD48dGV4dCBhcmlhLWhpZGRlbj0idHJ1ZSIgeD0iMTAzNSIgeT0iMTUwIiBmaWxsPSIjMDEwMTAxIiBmaWxsLW9wYWNpdHk9Ii4zIiB0cmFuc2Zvcm09InNjYWxlKC4xKSIgdGV4dExlbmd0aD0iMTAxMCI+YXJYaXY6MjIwNS4wNzYxODwvdGV4dD48dGV4dCB4PSIxMDM1IiB5PSIxNDAiIHRyYW5zZm9ybT0ic2NhbGUoLjEpIiBmaWxsPSIjZmZmIiB0ZXh0TGVuZ3RoPSIxMDEwIj5hclhpdjoyMjA1LjA3NjE4PC90ZXh0PjwvZz48L3N2Zz4=" alt="arXiv" /></a> <!-- badges: end --></p>
-<p>This repository aims to make the results from <a href="https://arxiv.org/abs/2205.07618">this publication</a>
-reproducible. There are three subdirectories, two of which allow for
-exact reproducibility of results (<code>ARL_simulations</code> and
-<code>LROI_appl_sim</code>). The subdirectory
-<code>Reproducible_example</code> demonstrates a simple example of the
-approaches using the publicly available package <a href="https://github.com/d-gomon/success">success</a> on a simulated
-data set.</p>
-<p>The three subdirectories are described in more detail below.</p>
-<div id="arl_simulations" class="section level2">
-<h2>ARL_simulations</h2>
-<p>This subdirectory contains:</p>
-<ul>
-<li><code>ALLFUNCTIONS.Rmd</code>: stand-alone functions used to perform
-the simulation study.</li>
-<li><code>ARL_simulations.Rmd</code>: shows how the simulation study was
-performed using the functions in <code>ALLFUNCTIONS.Rmd</code></li>
-</ul>
-<p>The simulations study consisted of three steps:</p>
-<ul>
-<li>Determine control limits such that the average run length was
-approximately <span class="math inline">\(15\)</span> years on a
-simulated sample of <span class="math inline">\(3000\)</span>
-hospitals.</li>
-<li>Determine control charts on samples of <span class="math inline">\(3000\)</span> simulated out-of-control hospitals,
-with many different true failure rates.</li>
-<li>Compare average run lengths of the methods over these different
-failure rates.</li>
-</ul>
-<p>Note: the code in this subdirectory is quite slow and cannot be used
-for other practical applications of the methods. If you would like to
-construct control charts for your data, please take a look at the <a href="https://github.com/d-gomon/success">success</a> package.
-Unfortunately, the <a href="https://github.com/d-gomon/success">success</a> package does not
-incorporate ARL restriction.</p>
-</div>
-<div id="lroi_appl_sim" class="section level2">
-<h2>LROI_appl_sim</h2>
-<p>This subdirectory contains:</p>
-<ul>
-<li><code>LROI_Detection.Rmd</code>: Shows how the <a href="https://github.com/d-gomon/success">success</a> package was used
-to determine the detection times of hospitals in the Dutch Arthroplasty
-data set.</li>
-<li><code>LROI_Power.Rmd</code>: Shows how the <a href="https://github.com/d-gomon/success">success</a> package was used
-to perform a simulation study for power over time for hospitals with
-comparable failure rates to the Dutch Arthroplasty data set.</li>
-<li><code>success_0.1.0.tar.gz</code>: the binary <a href="https://github.com/d-gomon/success">success</a> package which was
-used in the two files mentioned above.</li>
-</ul>
-<p>The simulation study for power over time consisted of the following
-steps:</p>
-<ul>
-<li>Determine control limits on a simulated sample of <span class="math inline">\(500\)</span> hospitals such that the type I error
-over a certain time frame was restricted.</li>
-<li>Determine detection times on simulated samples of <span class="math inline">\(500\)</span> out-of-control hospitals.</li>
-<li>Compare the power over time (true detections over time) of the
-methods.</li>
-</ul>
-</div>
-<div id="reproducible_example" class="section level2">
-<h2>Reproducible_example</h2>
+<div id="reproducible_example" class="section level1">
+<h1>Reproducible_example</h1>
 <p>As the code in <code>ARL_simulations</code> is very slow and the data
 set used in <code>LROI_appl_sim</code> is not publicly available, we
 provide a small reproducible example where we show how to obtain similar
@@ -449,7 +388,15 @@ run the code in this subdirectory.</li>
 <p>The aim of this subdirectory is to provide users with a simple
 example of how to perform simulation studies using the <a href="https://github.com/d-gomon/success">success</a> package. This is
 demonstrated on an enclosed simulated data set.</p>
-</div>
+<p>The reproducible example consists of two parts:</p>
+<ul>
+<li>A small simulation study where the power over time of the Bernoulli,
+BK- and CGR-CUSUM charts is compared when restricting the type I error
+over time on an in-control sample.</li>
+<li>A small simulation study comparing the average run length (ARL) of
+the three methods when the in-control ARL is restricted on a sample of
+in-control hospitals.</li>
+</ul>
 </div>
 
 
